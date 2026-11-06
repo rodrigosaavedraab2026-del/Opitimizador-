@@ -22,8 +22,17 @@ El instalador acepta `/S` para instalar sin ventanas. Se desinstala desde *Aplic
 | Archivos repetidos | Comparación por contenido (SHA-256); conserva siempre una copia |
 | Red | Pruebas de conectividad, adaptadores, vaciar DNS, renovar IP, restablecer Winsock/TCP-IP |
 | Ajustes de Windows | Privacidad, sugerencias, transparencia, animaciones, modo juego, extensiones, Inicio rápido, hibernación |
+| Auditoría de seguridad | Defender, firewall, UAC, SMBv1, RDP, autorun, Secure Boot, BitLocker, actualizaciones, cuentas; con puntuación y corrección con un clic |
+| Persistencia y conexiones | Inicio, tareas programadas y servicios con firma digital, ruta de riesgo y hash; conexiones TCP con su proceso |
+| Analizar archivo | Análisis estático (nunca ejecuta): hashes, entropía, estructura PE, APIs, cadenas/IOC y regla YARA borrador |
+| Eventos de seguridad | Lee los registros de Windows (wevtutil): fuerza bruta, cuentas nuevas, administradores añadidos, servicios, borrado de logs y Defender |
 | Información | Hardware, BIOS, GPU, discos y salud SMART |
 | Administrador | Hacer administrador a un usuario local |
+
+## Seguridad defensiva
+Inspirada en las áreas defensivas del repositorio «Claude-Code-CyberSecurity-Skill» (blue team, threat hunting, malware analysis, log analysis).
+Es **heurística**, no un antivirus: separa lo *observado* de lo *inferido*, nunca ejecuta archivos y no envía nada a Internet
+(solo ofrece un enlace a VirusTotal con el hash). Las partes ofensivas de ese repositorio (exploits, payloads, red team) no se incluyen.
 
 ## Cómo está hecho
 - Go sin dependencias externas salvo `golang.org/x/sys`. Lecturas y cambios por **APIs nativas** (registro, procesos, servicios, discos, memoria);

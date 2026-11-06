@@ -21,7 +21,7 @@ var payload []byte
 
 const (
 	appName    = "Optimizador PC"
-	appVersion = "1.1.0"
+	appVersion = "1.2.0"
 	publisher  = "Optimizador PC"
 	exeName    = "OptimizadorPC.exe"
 	uninstName = "Desinstalar.exe"

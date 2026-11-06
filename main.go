@@ -12,9 +12,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -64,7 +66,6 @@ func guard(h http.HandlerFunc) http.HandlerFunc {
 				http.Error(w, "origen no permitido", http.StatusForbidden)
 				return
 			}
-			r.Body = http.MaxBytesReader(w, r.Body, 4<<20)
 		}
 		h(w, r)
 	}
@@ -157,7 +158,12 @@ func fatal(msg string) {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v interface{}) bool {
-	if r.Method != http.MethodPost || json.NewDecoder(r.Body).Decode(v) != nil {
+	if r.Method != http.MethodPost {
+		writeErr(w, 400, "petición inválida")
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<20)
+	if json.NewDecoder(r.Body).Decode(v) != nil {
 		writeErr(w, 400, "petición inválida")
 		return false
 	}
@@ -425,6 +431,115 @@ func registerAPI(mux *http.ServeMux, base string) {
 		writeJSON(w, map[string]bool{"ok": true})
 	})
 	api("net", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, listAdapters()) })
+
+	// ---- seguridad defensiva
+	api("secaudit", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]string{"job": startJob(func(j *Job) { j.setResult(ejecutarAuditoria()) })})
+	})
+	api("secfix", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			ID string `json:"id"`
+		}
+		if !decode(w, r, &b) {
+			return
+		}
+		msg, err := corregirAuditoria(b.ID)
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, map[string]string{"msg": msg})
+	})
+	api("persist", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]string{"job": startJob(func(j *Job) { j.setResult(buscarPersistencia(j)) })})
+	})
+	api("taskoff", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Tarea string `json:"tarea"`
+		}
+		if !decode(w, r, &b) {
+			return
+		}
+		if err := desactivarTarea(b.Tarea); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, map[string]bool{"ok": true})
+	})
+	api("events", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Horas int `json:"horas"`
+		}
+		if !decode(w, r, &b) {
+			return
+		}
+		writeJSON(w, map[string]string{"job": startJob(func(j *Job) { j.setResult(leerEventosSeguridad(j, b.Horas)) })})
+	})
+	api("auditlogon", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, 405, "método no permitido")
+			return
+		}
+		if err := activarAuditoriaLogon(); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, map[string]bool{"ok": true})
+	})
+	api("analyze", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, 405, "método no permitido")
+			return
+		}
+		var ruta, nombre, tmp string
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+			var b struct {
+				Path string `json:"path"`
+			}
+			if !decode(w, r, &b) {
+				return
+			}
+			ruta = filepath.Clean(strings.Trim(strings.TrimSpace(b.Path), `"`))
+			if st, err := os.Stat(ruta); err != nil || st.IsDir() {
+				writeErr(w, 400, "esa ruta no es un archivo")
+				return
+			}
+			nombre = filepath.Base(ruta)
+		} else {
+			r.Body = http.MaxBytesReader(w, r.Body, 300<<20)
+			nombre = safeName(r.URL.Query().Get("name"))
+			dir, err := os.MkdirTemp("", "OptimizadorPC-analisis-")
+			if err != nil {
+				writeErr(w, 500, err.Error())
+				return
+			}
+			tmp = dir
+			ruta = filepath.Join(dir, nombre)
+			f, err := os.Create(ruta)
+			if err == nil {
+				_, err = io.Copy(f, r.Body)
+				f.Close()
+			}
+			if err != nil {
+				os.RemoveAll(dir)
+				writeErr(w, 400, "no se pudo recibir el archivo (máximo 300 MB): "+err.Error())
+				return
+			}
+		}
+		writeJSON(w, map[string]string{"job": startJob(func(j *Job) {
+			if tmp != "" {
+				defer os.RemoveAll(tmp)
+			}
+			j.log("Analizando " + nombre + " (el archivo no se ejecuta)...")
+			a, err := analizarArchivo(j, ruta, nombre, tmp != "")
+			if err != nil {
+				j.log("[XX] " + err.Error())
+				return
+			}
+			j.setResult(a)
+			j.log("[OK] Análisis completado.")
+		})})
+	})
 	api("nettest", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, testRed()) })
 }
 
@@ -502,10 +617,25 @@ func (j *Job) snapshot(from int) map[string]interface{} {
 	if from < 0 || from > len(j.lines) {
 		from = 0
 	}
-	m := map[string]interface{}{"lines": j.lines[from:], "next": len(j.lines), "done": j.done, "progress": j.prog}
+	lines := append([]string{}, j.lines[from:]...)
+	m := map[string]interface{}{"lines": lines, "next": len(j.lines), "done": j.done, "progress": j.prog}
 	if j.done {
 		m["result"] = j.result
 		m["cancelled"] = j.ctx.Err() != nil
 	}
 	return m
+}
+
+func safeName(n string) string {
+	n = filepath.Base(strings.TrimSpace(n))
+	n = strings.Map(func(r rune) rune {
+		if strings.ContainsRune(`<>:"/\|?*`, r) || r < 32 {
+			return '_'
+		}
+		return r
+	}, n)
+	if n == "" || n == "." || n == ".." {
+		n = "muestra.bin"
+	}
+	return n
 }

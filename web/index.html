@@ -139,6 +139,7 @@
   .spark polyline{fill:none;stroke:var(--acc);stroke-width:1.6;vector-effect:non-scaling-stroke}
   .spark path{fill:var(--acc-soft);stroke:none}
   .big{font:600 30px/1.1 var(--f-mono);letter-spacing:-.02em}
+  .meter .big{font-size:24px}
   .kv{display:grid;grid-template-columns:max-content 1fr;gap:7px 20px}
   .kv dt{color:var(--mut)} .kv dd{margin:0;word-break:break-word}
   .rec{display:flex;gap:12px;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line)}
@@ -171,6 +172,17 @@
   .modal h2{margin:0 0 8px;font-size:18px} .modal p{margin:0 0 18px;color:var(--mut);white-space:pre-line}
   .modal .row{justify-content:flex-end}
 
+  .verdict{display:flex;gap:16px;align-items:center}
+  .vbadge{font:600 13px var(--f-ui);padding:6px 14px;border-radius:99px;white-space:nowrap}
+  .vbadge.bajo{background:var(--ok-soft);color:var(--ok)} .vbadge.medio{background:var(--warn-soft);color:var(--warn)} .vbadge.alto{background:var(--bad-soft);color:var(--bad)}
+  .drop{border:2px dashed var(--line2);border-radius:var(--r);padding:30px 18px;text-align:center;color:var(--mut);cursor:pointer;transition:.15s}
+  .drop:hover,.drop.over{border-color:var(--acc);background:var(--acc-soft);color:var(--txt)}
+  .hash{font:12px var(--f-mono);word-break:break-all}
+  pre.code{background:#0d1014;color:#d7dde7;border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;font:12.5px/1.5 var(--f-mono);overflow:auto;max-height:340px;margin:0;white-space:pre}
+  .sev{display:flex;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line)} .sev:last-child{border-bottom:0}
+  .sev .t{flex:1;min-width:0} .sev small{display:block;color:var(--mut)}
+  .why{margin:4px 0 0;padding-left:18px;color:var(--mut);font-size:12.5px}
+  ul.plain{margin:0;padding-left:18px} ul.plain li{margin:2px 0}
   @media (max-width:860px){.app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
     nav{flex-direction:row;overflow-x:auto;padding:8px;border-right:0;border-bottom:1px solid var(--line);gap:2px}
     nav .grp,nav .brand,nav .foot,nav .sp{display:none} nav button.nv{width:auto;white-space:nowrap}}
@@ -196,6 +208,10 @@
   <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 8h16l-1-4H5z"/><path d="M5 8v12h14V8"/><path d="M9 20v-6h6v6"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></symbol>
   <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v5M12 17.5v.01"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-log" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
 </defs></svg>
 
 <div class="app">
@@ -272,7 +288,7 @@ async function runJob(kind, body, ui) {
   let from = 0, snap;
   for (;;) {
     snap = await api('job?id=' + job + '&from=' + from);
-    for (const l of snap.lines) {
+    for (const l of arr(snap.lines)) {
       const d = document.createElement('div');
       d.className = l.includes('[OK]') ? 'ok' : (l.includes('[!!]') || l.includes('[XX]')) ? 'wr' : (l.startsWith('>>') || l.startsWith('==')) ? 'hd' : '';
       d.textContent = l; log.appendChild(d);
@@ -294,6 +310,7 @@ const NAV = [
   ['Resumen', [['panel','Panel','panel']]],
   ['Mantenimiento', [['clean','Limpieza','clean'],['opt','Optimizar','bolt'],['start','Programas de inicio','rocket'],['prog','Desinstalar','box'],['repair','Reparar Windows','wrench']]],
   ['Herramientas', [['procs','Procesos','cpu'],['services','Servicios','gear'],['big','Archivos grandes','disk'],['dupes','Archivos repetidos','copy'],['net','Red','net'],['settings','Ajustes de Windows','sliders']]],
+  ['Seguridad', [['sec','Auditoría de seguridad','lock'],['persist','Persistencia y conexiones','search'],['analyze','Analizar archivo','file'],['events','Eventos de seguridad','log']]],
   ['Sistema', [['info','Información','info'],['adm','Administrador','shield']]],
 ];
 $('#menu').innerHTML = NAV.map(([g, items]) => `<div class="grp">${g}</div>` +
@@ -679,6 +696,155 @@ pages.adm = async () => {
     if (!await ask('Hacer administrador', `¿Dar permisos de administrador a «${b.dataset.u}»?`, 'Confirmar')) return;
     try { toast((await api('makeadmin', { user: b.dataset.u })).msg); go('adm'); } catch (e) { toast('Error: ' + e.message); }
   });
+};
+
+// ================= SEGURIDAD (defensiva, sobre este equipo) =================
+async function jobResult(url, body, label) {
+  const { job } = await api(url, body);
+  for (;;) {
+    const s = await api('job?id=' + job + '&from=0');
+    const pt = $('#jobmsg'); if (pt) pt.textContent = (s.progress || (arr(s.lines).length ? arr(s.lines)[arr(s.lines).length - 1] : label || 'Trabajando…'));
+    if (s.done) { if (s.result == null) throw new Error((arr(s.lines).find(l => l.includes('[XX]')) || 'La tarea no devolvió resultados').replace('[XX] ', '')); return s.result; }
+    await new Promise(r => setTimeout(r, 600));
+  }
+}
+const busy = t => `<div class="loading"><span class="spin"></span><span id="jobmsg">${esc(t)}</span></div>`;
+const lvlPill = n => `<span class="pill ${n === 'alto' ? 'b' : n === 'medio' ? 'w' : 'ok'}">${n === 'alto' ? 'Revisar' : n === 'medio' ? 'Atención' : 'Sin señales'}</span>`;
+async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('Copiado'); } catch { toast('No se pudo copiar'); } }
+
+// ---- Auditoría
+pages.sec = async () => {
+  $('#main').innerHTML = head('Auditoría de seguridad', 'Revisa la configuración de protección de este equipo y corrige lo que esté débil.', `<button class="btn sec" id="rf">Volver a auditar</button>`) +
+    `<div id="box">${busy('Auditando… (unos segundos)')}</div>`;
+  $('#rf').onclick = () => go('sec');
+  const list = arr(await jobResult('secaudit'));
+  const pen = { ok: 0, info: 0, warn: 8, bad: 20 }; let score = Math.max(0, 100 - list.reduce((a, c) => a + (pen[c.status] || 0), 0));
+  const col = score >= 85 ? 'var(--ok)' : score >= 60 ? 'var(--warn)' : 'var(--bad)';
+  const n = k => list.filter(c => c.status === k).length;
+  $('#box').innerHTML = `<div class="grid g3"><div class="card"><h3>Puntuación</h3><div class="meter"><div class="ring">${ringSVG(score, col)}<div class="v">${score}<small>de 100</small></div></div>
+      <div><div class="big">${score >= 85 ? 'Sólida' : score >= 60 ? 'Mejorable' : 'Débil'}</div><div class="mut small">${n('bad')} crítico(s) · ${n('warn')} aviso(s)</div></div></div></div>
+    <div class="card" style="grid-column:span 2"><h3>Cómo leerlo</h3><p class="mut" style="margin:0">Cada comprobación lee la configuración real de Windows. «Crítico» y «aviso» indican configuraciones débiles, no que haya un ataque. Algunas correcciones requieren reiniciar y otras pueden estar bloqueadas por directivas de tu organización.</p></div></div>
+    <div class="card">${list.map((c, i) => `<div class="sev"><span class="dot ${c.status === 'ok' ? '' : c.status === 'warn' ? 'w' : c.status === 'bad' ? 'b' : ''}" style="${c.status === 'info' ? 'background:var(--line2)' : ''};margin-top:6px"></span>
+      <div class="t"><b>${esc(c.name)}</b><small>${esc(c.detail)}</small></div>${c.fix ? `<button class="btn sec sm" data-i="${i}">${esc(c.fix)}</button>` : ''}</div>`).join('')}</div>`;
+  $$('#box button[data-i]').forEach(b => b.onclick = async () => {
+    const c = list[b.dataset.i];
+    if (!await ask(c.fix + ': ' + c.name, 'Se cambiará la configuración de Windows. Puede requerir reiniciar para aplicarse.', c.fix)) return;
+    b.disabled = true; try { toast((await api('secfix', { id: c.id })).msg); go('sec'); } catch (e) { b.disabled = false; toast('Error: ' + e.message); }
+  });
+};
+
+// ---- Persistencia y conexiones
+pages.persist = async () => {
+  $('#main').innerHTML = head('Persistencia y conexiones', 'Busca programas que se ejecutan solos (inicio, tareas, servicios) y las conexiones de red abiertas, con su proceso y firma digital.',
+    `<button class="btn sec" id="rf">Volver a analizar</button>`) + `<div id="box">${busy('Analizando…')}</div>`;
+  $('#rf').onclick = () => go('persist');
+  const r = await jobResult('persist');
+  const items = arr(r.items), con = arr(r.conexiones); let show = 'rev', cf = 'rel';
+  const TIPO = { inicio: 'Inicio', tarea: 'Tarea programada', servicio: 'Servicio' };
+  $('#box').innerHTML = `<div class="banner">${ico('warn')}<div><b>Cómo interpretarlo.</b> «Revisar» no significa que sea un virus: es un programa que merece una mirada (carpeta temporal, sin firma, archivo inexistente…). Muchos programas legítimos y pequeños no están firmados. Si dudas, analiza el archivo en «Analizar archivo».</div></div>
+    ${arr(r.notas).map(x => `<div class="banner">${ico('warn')}<div>${esc(x)}</div></div>`).join('')}
+    <div class="row" style="margin-bottom:12px"><div class="filters" id="pf"><button class="fchip" data-f="rev" aria-pressed="true">Para revisar (${items.filter(x => x.nivel !== 'bajo').length})</button><button class="fchip" data-f="all" aria-pressed="false">Todos (${items.length})</button></div></div>
+    <div class="card tw"><table><thead><tr><th>Tipo</th><th>Elemento</th><th>Firma</th><th>Valoración</th><th></th></tr></thead><tbody id="pt"></tbody></table></div>
+    <h3 class="lbl" style="margin-top:22px">Conexiones TCP activas</h3>
+    <div class="row" style="margin-bottom:12px"><div class="filters" id="cfl"><button class="fchip" data-f="rel" aria-pressed="true">Relevantes</button><button class="fchip" data-f="est" aria-pressed="false">Conectadas</button><button class="fchip" data-f="lis" aria-pressed="false">Escuchando</button><button class="fchip" data-f="all" aria-pressed="false">Todas</button></div><span class="mut small" id="ccnt"></span></div>
+    <div class="card tw"><table><thead><tr><th>Proceso</th><th>Local</th><th>Remoto</th><th>Estado</th><th></th></tr></thead><tbody id="ct"></tbody></table></div>`;
+  const drawP = () => {
+    const f = items.filter(x => show === 'all' || x.nivel !== 'bajo');
+    $('#pt').innerHTML = f.map((x, i) => `<tr><td><span class="pill">${TIPO[x.tipo] || x.tipo}</span></td>
+      <td><b>${esc(x.nombre)}</b><div class="cmd trunc" title="${esc(x.detalle)}">${esc(x.detalle)}</div>
+        <ul class="why">${arr(x.motivos).map(m => `<li>${esc(m)}</li>`).join('')}</ul>${x.sha256 ? `<div class="hash mut" style="margin-top:4px">SHA-256 ${esc(x.sha256.slice(0, 16))}…</div>` : ''}</td>
+      <td>${x.firma ? `<span class="pill ${x.firma === 'Valid' ? 'ok' : x.firma === 'NotSigned' ? 'w' : x.firma === 'Error' ? '' : 'b'}">${x.firma === 'Valid' ? 'Válida' : x.firma === 'NotSigned' ? 'Sin firma' : x.firma === 'Error' ? '—' : 'Inválida'}</span>` : '<span class="mut">—</span>'}</td>
+      <td>${lvlPill(x.nivel)}</td>
+      <td class="r"><div class="row" style="justify-content:flex-end;gap:6px">${x.sha256 ? `<button class="btn sec sm" data-cp="${esc(x.sha256)}">Copiar hash</button>` : ''}
+        ${x.ruta ? `<button class="btn sec sm" data-rv="${esc(x.ruta)}">Mostrar</button>` : ''}
+        ${x.tipo === 'inicio' ? `<button class="btn danger sm" data-off="${i}">Desactivar</button>` : x.tipo === 'tarea' ? `<button class="btn danger sm" data-tk="${i}">Desactivar</button>` : x.tipo === 'servicio' ? `<button class="btn sec sm" onclick="go('services')">Servicios</button>` : ''}</div></td></tr>`).join('')
+      || `<tr><td colspan="5" class="empty">No se encontró nada que requiera revisión.</td></tr>`;
+    $$('#pt [data-cp]').forEach(b => b.onclick = () => copyText(b.dataset.cp));
+    $$('#pt [data-rv]').forEach(b => b.onclick = () => api('reveal', { path: b.dataset.rv }).catch(e => toast(e.message)));
+    $$('#pt [data-off]').forEach(b => b.onclick = async () => { const x = f[b.dataset.off];
+      if (!await ask('Desactivar inicio', `«${x.nombre}» dejará de arrancar con Windows. Puedes reactivarlo en «Programas de inicio».`, 'Desactivar', true)) return;
+      try { await api('startup', { scope: x.scope, name: x.nombre, enabled: false }); toast('Desactivado'); b.closest('tr').remove(); } catch (e) { toast(e.message); } });
+    $$('#pt [data-tk]').forEach(b => b.onclick = async () => { const x = f[b.dataset.tk];
+      if (!await ask('Desactivar tarea programada', `«${x.nombre}» dejará de ejecutarse. Puedes reactivarla desde el Programador de tareas.`, 'Desactivar', true)) return;
+      try { await api('taskoff', { tarea: x.tarea }); toast('Tarea desactivada'); b.closest('tr').remove(); } catch (e) { toast(e.message); } });
+  };
+  const drawC = () => {
+    const f = con.filter(c => cf === 'all' || (cf === 'rel' && (c.nivel !== 'bajo' || c.motivo)) || (cf === 'est' && c.estado === 'Conectada') || (cf === 'lis' && c.estado === 'Escuchando'));
+    $('#ccnt').textContent = f.length + ' de ' + con.length;
+    $('#ct').innerHTML = f.slice(0, 300).map(c => `<tr><td><b>${esc(c.proceso || '—')}</b> <span class="mono small mut">PID ${c.pid}</span>${c.motivo ? `<div class="small mut">${esc(c.motivo)}</div>` : ''}</td>
+      <td class="mono small">${esc(c.local)}</td><td class="mono small">${esc(c.remoto)}</td><td><span class="pill ${c.nivel === 'alto' ? 'b' : c.nivel === 'medio' ? 'w' : ''}">${esc(c.estado)}</span></td>
+      <td class="r">${c.ruta ? `<button class="btn sec sm" data-rvc="${esc(c.ruta)}">Ruta</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Sin conexiones en esta vista.</td></tr>';
+    $$('#ct [data-rvc]').forEach(b => b.onclick = () => toast(b.dataset.rvc));
+  };
+  $$('#pf button').forEach(b => b.onclick = () => { show = b.dataset.f; $$('#pf button').forEach(x => x.setAttribute('aria-pressed', x === b)); drawP(); });
+  $$('#cfl button').forEach(b => b.onclick = () => { cf = b.dataset.f; $$('#cfl button').forEach(x => x.setAttribute('aria-pressed', x === b)); drawC(); });
+  drawP(); drawC();
+};
+
+// ---- Analizar archivo
+pages.analyze = async () => {
+  $('#main').innerHTML = head('Analizar archivo', 'Análisis estático de un archivo sospechoso: hashes, entropía, estructura PE, cadenas e indicadores. El archivo nunca se ejecuta.') +
+    `<div class="card"><div class="drop" id="drop" tabindex="0" role="button" aria-label="Elegir archivo">${ico('file')}<div style="margin-top:6px"><b>Arrastra un archivo aquí</b> o haz clic para elegirlo</div><div class="small">Hasta 300 MB. Se copia a una carpeta temporal solo durante el análisis.</div></div>
+      <input type="file" id="fi" hidden>
+      <div class="row" style="margin-top:14px"><label class="small mut" style="flex:1;min-width:260px">…o escribe la ruta de un archivo (sin copiarlo)<br><input type="text" id="path" placeholder="C:\\Users\\yo\\Downloads\\instalador.exe" style="width:100%"></label>
+      <button class="btn" id="go" style="align-self:flex-end">Analizar ruta</button></div></div><div id="res"></div>`;
+  const run = async (fn) => {
+    $('#res').innerHTML = `<div class="card">${busy('Analizando…')}</div>`;
+    try {
+      const { job } = await fn(); let s;
+      for (;;) { s = await api('job?id=' + job + '&from=0'); if (s.done) break; await new Promise(r => setTimeout(r, 500)); }
+      if (!s.result) throw new Error((arr(s.lines).find(l => l.includes('[XX]')) || 'No se pudo analizar').replace('[XX] ', ''));
+      showAnalysis(s.result);
+    } catch (e) { $('#res').innerHTML = `<div class="card"><span class="pill b">Error</span> ${esc(e.message)}</div>`; }
+  };
+  const upload = f => run(async () => { const r = await fetch('api/analyze?name=' + encodeURIComponent(f.name), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f });
+    const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error ' + r.status); return j; });
+  const drop = $('#drop'), fi = $('#fi');
+  drop.onclick = () => fi.click(); drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') fi.click(); };
+  fi.onchange = () => fi.files[0] && upload(fi.files[0]);
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) upload(f); });
+  $('#go').onclick = () => { const p = $('#path').value.trim(); if (!p) return toast('Escribe una ruta.'); run(() => api('analyze', { path: p })); };
+};
+function showAnalysis(a) {
+  const hs = arr(a.hallazgos), pe = a.pe;
+  $('#res').innerHTML = `<div class="card"><div class="verdict"><span class="vbadge ${a.veredicto}">${a.veredicto === 'alto' ? 'Indicadores relevantes' : a.veredicto === 'medio' ? 'Algunos indicadores' : 'Sin indicadores fuertes'}</span>
+      <div><b>${esc(a.nombre)}</b><div class="mut small">${esc(a.tipo)} · ${fmt(a.tam)}${a.firma ? ' · firma: ' + esc(a.firma.status) : ''}</div></div></div>
+      <p class="mut small" style="margin:12px 0 0">Esto es un análisis estático heurístico, no un antivirus. <b>Un resultado limpio no garantiza que el archivo sea seguro</b>, y uno con indicadores no prueba que sea malicioso: confirma con otras fuentes (por ejemplo, buscando el hash en VirusTotal).</p></div>
+    <div class="grid g2"><div class="card"><h3>Hashes</h3><dl class="kv"><dt>SHA-256</dt><dd class="hash">${a.sha256} <button class="btn sec sm" data-cp="${a.sha256}">Copiar</button></dd><dt>SHA-1</dt><dd class="hash">${a.sha1}</dd><dt>MD5</dt><dd class="hash">${a.md5}</dd><dt>Entropía</dt><dd class="mono">${a.entropia} / 8</dd></dl>
+      <p class="small" style="margin:12px 0 0"><a href="https://www.virustotal.com/gui/file/${a.sha256}" target="_blank" rel="noopener noreferrer" style="color:var(--acc)">Buscar este hash en VirusTotal ↗</a> <span class="mut">(solo se envía el hash, no el archivo)</span></p></div>
+      <div class="card"><h3>Hallazgos</h3>${hs.length ? hs.map(h => `<div class="sev"><span class="dot ${h.peso > 1 ? 'w' : ''}" style="${h.peso <= 0 ? 'background:var(--ok)' : ''};margin-top:6px"></span><div class="t">${esc(h.texto)}<small>${h.tipo === 'observado' ? 'Observado en el archivo' : 'Inferido (interpretación)'}</small></div></div>`).join('') : '<div class="mut">No se encontraron indicadores.</div>'}</div></div>
+    ${pe ? `<div class="card tw"><h3>Estructura PE · ${esc(pe.maquina)} · ${esc(pe.subsistema)} · compilado ${esc(pe.compilado)}</h3>
+      <div class="row small mut" style="margin-bottom:10px"><span>ASLR: ${pe.aslr ? 'sí' : 'no'}</span><span>DEP: ${pe.dep ? 'sí' : 'no'}</span><span>Firma incrustada: ${pe.firmaIncrustada ? 'sí' : 'no'}</span><span>${pe.importes} funciones importadas</span>${pe.overlay ? `<span>Datos extra al final: ${fmt(pe.overlay)}</span>` : ''}</div>
+      <table><thead><tr><th>Sección</th><th class="r">Tamaño</th><th>Permisos</th><th>Entropía</th></tr></thead><tbody>${arr(pe.secciones).map(s => `<tr><td class="mono">${esc(s.nombre)}</td><td class="r mono small">${fmt(s.tam)}</td><td class="mono small">${esc(s.flags)}</td><td><div class="row" style="gap:8px"><div class="sizebar" style="width:120px;margin:0"><i style="width:${s.entropia / 8 * 100}%;${s.entropia >= 7.2 ? 'background:var(--bad)' : ''}"></i></div><span class="mono small">${s.entropia}</span></div></td></tr>`).join('')}</tbody></table>
+      ${arr(pe.apis).length ? `<h3 class="lbl" style="margin-top:16px">APIs de interés importadas</h3>${arr(pe.apis).map(h => `<div class="small"><b>${esc(h.categoria)}:</b> <span class="mono mut">${arr(h.funciones).map(esc).join(', ')}</span></div>`).join('')}<p class="small mut">Muchos programas legítimos usan estas funciones; importan señal solo combinadas con otros indicadores.</p>` : ''}</div>` : ''}
+    <div class="grid g2">${[['URLs', a.cadenas.urls], ['Direcciones IP', a.cadenas.ips], ['Claves de registro', a.cadenas.registro], ['Comandos', a.cadenas.comandos], ['Rutas', a.cadenas.rutas]].filter(x => arr(x[1]).length).map(x => `<div class="card"><h3>${x[0]} (${arr(x[1]).length})</h3><ul class="plain mono small" style="word-break:break-all">${arr(x[1]).slice(0, 20).map(v => `<li>${esc(v)}</li>`).join('')}</ul></div>`).join('')}</div>
+    <div class="card"><h3>Regla YARA (borrador)</h3><p class="mut small" style="margin-top:0">Generada automáticamente a partir del archivo. <b>Sin validar</b>: pruébala contra archivos limpios antes de usarla para evitar falsos positivos.</p><pre class="code" id="yara">${esc(a.yara)}</pre><div class="row" style="margin-top:10px"><button class="btn sec sm" id="cpy">Copiar regla</button></div></div>
+    <div class="card"><h3>Cadenas más largas (${a.cadenas.total.toLocaleString('es')} extraídas${a.truncado ? ', solo los primeros 64 MB' : ''})</h3><pre class="code">${arr(a.cadenas.muestra).map(esc).join('\n')}</pre></div>`;
+  $$('#res [data-cp]').forEach(b => b.onclick = () => copyText(b.dataset.cp));
+  $('#cpy').onclick = () => copyText(a.yara);
+}
+
+// ---- Eventos de seguridad
+pages.events = async () => {
+  $('#main').innerHTML = head('Eventos de seguridad', 'Lee el registro de eventos de Windows y destaca intentos de acceso, cuentas nuevas, servicios instalados y detecciones de Defender.',
+    `<select id="hrs" aria-label="Periodo"><option value="24">Últimas 24 horas</option><option value="168" selected>Últimos 7 días</option><option value="720">Últimos 30 días</option></select><button class="btn" id="go">Analizar</button>`) +
+    `<div id="box"><div class="card empty">Elige un periodo y pulsa «Analizar».</div></div>`;
+  $('#go').onclick = async () => {
+    $('#box').innerHTML = `<div class="card">${busy('Leyendo registros (puede tardar)…')}</div>`;
+    try {
+      const r = await jobResult('events', { horas: +$('#hrs').value }); const al = arr(r.alertas), ev = arr(r.eventos), c = r.conteos || {};
+      const stat = (k, t) => `<div class="card"><h3>${t}</h3><div class="big">${c[k] || 0}</div></div>`;
+      $('#box').innerHTML = `${arr(r.notas).map(x => `<div class="banner">${ico('warn')}<div>${esc(x)}</div></div>`).join('')}
+        <div class="grid g3">${stat('4625', 'Inicios fallidos')}${stat('4624', 'Inicios correctos')}${stat('4720', 'Cuentas creadas')}${stat('7045', 'Servicios instalados')}${stat('1116', 'Detecciones Defender')}${stat('1102', 'Registros borrados')}</div>
+        <div class="card"><h3>Alertas (${al.length})</h3>${al.length ? al.map(a => `<div class="sev"><span class="dot ${a.nivel === 'alto' ? 'b' : 'w'}" style="margin-top:6px"></span><div class="t"><b>${esc(a.titulo)}</b><small>${esc(a.texto)}</small></div>${lvlPill(a.nivel)}</div>`).join('') : '<div class="mut">No se detectaron patrones anómalos en este periodo.</div>'}</div>
+        <div class="card tw"><h3>Eventos recientes (${ev.length})</h3><table><thead><tr><th>Hora</th><th>ID</th><th>Evento</th><th>Usuario / objeto</th><th>Origen</th></tr></thead><tbody>
+        ${ev.map(e => `<tr><td class="mono small">${esc(e.hora)}</td><td class="mono small mut">${e.id}</td><td>${esc(e.texto)}</td><td>${esc(e.quien)}</td><td class="mono small">${esc(e.origen)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Sin eventos.</td></tr>'}</tbody></table></div>
+        <div class="card"><h3>Auditoría de inicios de sesión</h3><p class="mut" style="margin-top:0">Si no aparecen inicios de sesión, Windows puede no estar registrándolos. Actívalo para tener datos en el futuro.</p><button class="btn sec" id="aud">Activar auditoría de inicios de sesión</button></div>`;
+      $('#aud').onclick = async () => { try { await api('auditlogon', {}); toast('Auditoría activada'); } catch (e) { toast('Error: ' + e.message); } };
+    } catch (e) { $('#box').innerHTML = `<div class="card"><span class="pill b">Error</span> ${esc(e.message)}</div>`; }
+  };
 };
 
 go('panel');
