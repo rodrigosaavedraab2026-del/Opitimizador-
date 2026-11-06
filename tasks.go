@@ -1,3 +1,5 @@
+//go:build windows
+
 package main
 
 import (
@@ -7,9 +9,15 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"sort"
 	"strings"
+
+	"golang.org/x/sys/windows/registry"
 )
+
+func runtimeCPUs() int { return runtime.NumCPU() }
 
 // ------------------------------------------------------------ utilidades
 
@@ -26,7 +34,6 @@ func fmtSize(b int64) string {
 	return fmt.Sprintf("%d B", b)
 }
 
-// dirSize suma el tamano de una carpeta ignorando errores (archivos en uso, permisos).
 func dirSize(root string) int64 {
 	var total int64
 	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
@@ -43,8 +50,7 @@ func dirSize(root string) int64 {
 	return total
 }
 
-// vaciarCarpeta borra el CONTENIDO de una carpeta (no la carpeta en si).
-// Los archivos en uso se ignoran. Devuelve los bytes liberados.
+// vaciarCarpeta borra el CONTENIDO de una carpeta; los archivos en uso se omiten.
 func vaciarCarpeta(dir string) int64 {
 	if !carpetaSegura(dir) {
 		return 0
@@ -64,14 +70,13 @@ func vaciarCarpeta(dir string) int64 {
 	return before - after
 }
 
-// carpetaSegura: red de seguridad para no vaciar nunca una raiz o carpeta personal por error.
 func carpetaSegura(dir string) bool {
 	d := filepath.Clean(dir)
 	if len(d) < 8 || d == filepath.VolumeName(d)+string(filepath.Separator) {
 		return false
 	}
 	low := strings.ToLower(d)
-	for _, bad := range []string{"documents", "documentos", "desktop", "escritorio", "pictures", "imagenes", "downloads", "descargas"} {
+	for _, bad := range []string{"documents", "documentos", "desktop", "escritorio", "pictures", "imagenes", "imágenes", "downloads", "descargas", "videos", "music", "música"} {
 		if strings.HasSuffix(low, string(filepath.Separator)+bad) {
 			return false
 		}
@@ -90,7 +95,6 @@ func join(parts ...string) string {
 	return filepath.Join(parts...)
 }
 
-// glob de carpetas de perfil de navegador (Default, Profile 1, ...)
 func perfilesChromium(userData string, sub ...string) []string {
 	if userData == "" {
 		return nil
@@ -114,11 +118,13 @@ type limpItem struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Desc    string `json:"desc"`
+	Group   string `json:"group"`
 	Bytes   int64  `json:"bytes"`
 	Default bool   `json:"default"`
-	Manual  bool   `json:"manual"` // sin tamano estimable (accion directa)
+	Manual  bool   `json:"manual"`
 	paths   []string
-	files   []string // globs de archivos sueltos
+	files   []string
+	stopSvc []string
 }
 
 func catalogoLimpieza() []*limpItem {
@@ -127,7 +133,8 @@ func catalogoLimpieza() []*limpItem {
 	if win == "" {
 		win = env("SystemRoot")
 	}
-	firefox := []string{}
+	pd := env("ProgramData")
+	var firefox []string
 	if local != "" {
 		profs, _ := filepath.Glob(filepath.Join(local, "Mozilla", "Firefox", "Profiles", "*"))
 		for _, p := range profs {
@@ -135,20 +142,27 @@ func catalogoLimpieza() []*limpItem {
 		}
 	}
 	return []*limpItem{
-		{ID: "temp_user", Name: "Temporales del usuario", Desc: "Carpeta %TEMP%", Default: true, paths: []string{env("TEMP")}},
-		{ID: "temp_win", Name: "Temporales de Windows", Desc: "C:\\Windows\\Temp", Default: true, paths: []string{join(win, "Temp")}},
-		{ID: "prefetch", Name: "Prefetch", Desc: "Datos de precarga de programas", Default: true, paths: []string{join(win, "Prefetch")}},
-		{ID: "wu_cache", Name: "Caché de Windows Update", Desc: "Descargas de actualizaciones ya instaladas", Default: true, paths: []string{join(win, "SoftwareDistribution", "Download")}},
-		{ID: "crash", Name: "Volcados de errores", Desc: "Crash dumps de aplicaciones", Default: true, paths: []string{join(local, "CrashDumps")}},
-		{ID: "thumbs", Name: "Caché de miniaturas", Desc: "thumbcache_*.db del Explorador", Default: true, files: []string{join(local, "Microsoft", "Windows", "Explorer", "thumbcache_*.db")}},
-		{ID: "chrome", Name: "Caché de Chrome", Desc: "Solo caché, no contraseñas ni historial (cierra Chrome)", Default: true,
-			paths: perfilesChromium(join(local, "Google", "Chrome", "User Data"), "Cache", "Code Cache", "GPUCache")},
-		{ID: "edge", Name: "Caché de Edge", Desc: "Solo caché, no contraseñas ni historial", Default: true,
-			paths: perfilesChromium(join(local, "Microsoft", "Edge", "User Data"), "Cache", "Code Cache", "GPUCache")},
-		{ID: "firefox", Name: "Caché de Firefox", Desc: "Solo caché, no contraseñas ni historial", Default: true, paths: firefox},
-		{ID: "recycle", Name: "Papelera de reciclaje", Desc: "Vacía la papelera de todas las unidades", Default: true, Manual: true},
-		{ID: "dism", Name: "Limpieza profunda de componentes (DISM)", Desc: "StartComponentCleanup. Tarda varios minutos", Default: false, Manual: true},
-		{ID: "dns", Name: "Vaciar caché DNS", Desc: "ipconfig /flushdns", Default: true, Manual: true},
+		{ID: "temp_user", Group: "Sistema", Name: "Temporales del usuario", Desc: "Carpeta %TEMP%", Default: true, paths: []string{env("TEMP")}},
+		{ID: "temp_win", Group: "Sistema", Name: "Temporales de Windows", Desc: "C:\\Windows\\Temp", Default: true, paths: []string{join(win, "Temp")}},
+		{ID: "prefetch", Group: "Sistema", Name: "Prefetch", Desc: "Datos de precarga de programas", Default: true, paths: []string{join(win, "Prefetch")}},
+		{ID: "wu_cache", Group: "Sistema", Name: "Caché de Windows Update", Desc: "Descargas de actualizaciones ya instaladas (se detiene el servicio un momento)", Default: true,
+			paths: []string{join(win, "SoftwareDistribution", "Download")}, stopSvc: []string{"wuauserv", "bits"}},
+		{ID: "delivery", Group: "Sistema", Name: "Optimización de distribución", Desc: "Caché de Delivery Optimization", Default: true,
+			paths: []string{join(win, `ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache`)}, stopSvc: []string{"dosvc"}},
+		{ID: "wer", Group: "Sistema", Name: "Informes de errores de Windows", Desc: "Carpeta WER y volcados de aplicaciones", Default: true,
+			paths: []string{join(pd, `Microsoft\Windows\WER\ReportArchive`), join(pd, `Microsoft\Windows\WER\ReportQueue`), join(local, "CrashDumps")}},
+		{ID: "thumbs", Group: "Sistema", Name: "Caché de miniaturas", Desc: "thumbcache_*.db del Explorador", Default: true, files: []string{join(local, `Microsoft\Windows\Explorer\thumbcache_*.db`)}},
+		{ID: "dx", Group: "Sistema", Name: "Caché de shaders DirectX", Desc: "Se regenera sola al abrir juegos", Default: false, paths: []string{join(local, "D3DSCache")}},
+		{ID: "chrome", Group: "Navegadores", Name: "Caché de Chrome", Desc: "Solo caché, no contraseñas ni historial (cierra Chrome)", Default: true,
+			paths: perfilesChromium(join(local, `Google\Chrome\User Data`), "Cache", "Code Cache", "GPUCache")},
+		{ID: "edge", Group: "Navegadores", Name: "Caché de Edge", Desc: "Solo caché, no contraseñas ni historial", Default: true,
+			paths: perfilesChromium(join(local, `Microsoft\Edge\User Data`), "Cache", "Code Cache", "GPUCache")},
+		{ID: "brave", Group: "Navegadores", Name: "Caché de Brave", Desc: "Solo caché, no contraseñas ni historial", Default: true,
+			paths: perfilesChromium(join(local, `BraveSoftware\Brave-Browser\User Data`), "Cache", "Code Cache", "GPUCache")},
+		{ID: "firefox", Group: "Navegadores", Name: "Caché de Firefox", Desc: "Solo caché, no contraseñas ni historial", Default: true, paths: firefox},
+		{ID: "recycle", Group: "Acciones", Name: "Papelera de reciclaje", Desc: "Vacía la papelera de todas las unidades", Default: true, Manual: true},
+		{ID: "dism", Group: "Acciones", Name: "Limpieza profunda de componentes (DISM)", Desc: "StartComponentCleanup. Tarda varios minutos", Default: false, Manual: true},
+		{ID: "dns", Group: "Acciones", Name: "Vaciar caché DNS", Desc: "ipconfig /flushdns", Default: true, Manual: true},
 	}
 }
 
@@ -183,13 +197,13 @@ func runLimpieza(j *Job, ids []string) {
 	var total int64
 	j.log("== LIMPIEZA ==")
 	for _, it := range catalogoLimpieza() {
-		if !sel[it.ID] {
+		if !sel[it.ID] || j.cancelled() {
 			continue
 		}
 		switch it.ID {
 		case "recycle":
-			if err := runPS(j, "Clear-RecycleBin -Force -ErrorAction Stop", nil); err != nil {
-				j.log("[!!] Papelera ya vacía o no accesible")
+			if err := emptyRecycleBin(); err != nil {
+				j.log("[!!] Papelera: " + err.Error())
 			} else {
 				j.log("[OK] Papelera de reciclaje vaciada")
 			}
@@ -208,24 +222,31 @@ func runLimpieza(j *Job, ids []string) {
 			}
 		default:
 			var lib int64
-			for _, p := range it.paths {
-				if p != "" {
-					lib += vaciarCarpeta(p)
+			do := func() {
+				for _, p := range it.paths {
+					if p != "" {
+						lib += vaciarCarpeta(p)
+					}
 				}
-			}
-			for _, g := range it.files {
-				if g == "" {
-					continue
-				}
-				ms, _ := filepath.Glob(g)
-				for _, m := range ms {
-					if st, err := os.Stat(m); err == nil && os.Remove(m) == nil {
-						lib += st.Size()
+				for _, g := range it.files {
+					if g == "" {
+						continue
+					}
+					ms, _ := filepath.Glob(g)
+					for _, m := range ms {
+						if st, err := os.Stat(m); err == nil && os.Remove(m) == nil {
+							lib += st.Size()
+						}
 					}
 				}
 			}
+			if len(it.stopSvc) > 0 {
+				withServiceStopped(it.stopSvc, do)
+			} else {
+				do()
+			}
 			total += lib
-			j.log(fmt.Sprintf("[OK] %-40s liberado: %s", it.Name, fmtSize(lib)))
+			j.log(fmt.Sprintf("[OK] %-42s liberado: %s", it.Name, fmtSize(lib)))
 		}
 	}
 	j.log("")
@@ -234,48 +255,74 @@ func runLimpieza(j *Job, ids []string) {
 
 // ------------------------------------------------------------ optimizar
 
+var reGUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+
+func activarPlanEnergia(j *Job) {
+	list, _ := nativeOutput(20e9, "powercfg", "/list")
+	if m := regexp.MustCompile(`(?i)8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c`).FindString(list); m != "" {
+		if runNative(j, "powercfg", "/setactive", m) == nil {
+			j.log("[OK] Plan 'Alto rendimiento' activado")
+			return
+		}
+	}
+	// No existe: se crea una copia del plan 'Máximo rendimiento' y se activa SU nuevo GUID.
+	out, err := nativeOutput(20e9, "powercfg", "-duplicatescheme", "e9a42b02-d5df-448d-aa00-03f14749eb61")
+	if g := reGUID.FindString(out); err == nil && g != "" {
+		if runNative(j, "powercfg", "/setactive", g) == nil {
+			j.log("[OK] Plan 'Máximo rendimiento' creado y activado")
+			return
+		}
+	}
+	j.log("[!!] Este equipo no ofrece planes de alto rendimiento (suele pasar en portátiles con Modern Standby). No se cambió nada.")
+}
+
+func setDword(root registry.Key, path, name string, v uint32) error {
+	k, _, err := registry.CreateKey(root, path, registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+	return k.SetDWordValue(name, v)
+}
+
 func runOptimizar(j *Job, ids []string) {
 	sel := map[string]bool{}
 	for _, id := range ids {
 		sel[id] = true
 	}
 	j.log("== OPTIMIZACIÓN (modo seguro, reversible) ==")
-
 	if sel["restore"] {
 		j.log("Creando punto de restauración...")
 		err := runPS(j, `Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue; Checkpoint-Computer -Description "Optimizador PC" -RestorePointType MODIFY_SETTINGS -ErrorAction Stop`, nil)
 		if err != nil {
-			j.log("[!!] No se pudo crear el punto de restauración (Windows solo permite uno cada 24 h o está desactivado)")
+			j.log("[!!] No se pudo crear el punto de restauración (Windows permite uno cada 24 h o la protección del sistema está desactivada)")
 		} else {
 			j.log("[OK] Punto de restauración creado")
 		}
 	}
 	if sel["power"] {
-		if err := runNative(j, "powercfg", "/setactive", "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"); err != nil {
-			_ = runNative(j, "powercfg", "-duplicatescheme", "e9a42b02-d5df-448d-aa00-03f14749eb61")
-			if err2 := runNative(j, "powercfg", "/setactive", "e9a42b02-d5df-448d-aa00-03f14749eb61"); err2 != nil {
-				j.log("[!!] No se pudo cambiar el plan de energía (puede no estar disponible en este equipo)")
-			} else {
-				j.log("[OK] Plan de energía 'Máximo rendimiento' activado")
-			}
-		} else {
-			j.log("[OK] Plan de energía de alto rendimiento activado")
-		}
+		activarPlanEnergia(j)
 	}
 	if sel["trim"] {
 		j.log("Optimizando discos (TRIM en SSD / desfragmentación en HDD)...")
-		err := runPS(j, `Get-Volume | Where-Object { $_.DriveLetter -and $_.FileSystemType -eq 'NTFS' -and $_.DriveType -eq 'Fixed' } | ForEach-Object {
-  try { Optimize-Volume -DriveLetter $_.DriveLetter -ErrorAction Stop | Out-Null; Write-Output "[OK] Disco $($_.DriveLetter): optimizado" }
-  catch { Write-Output "[!!] No se pudo optimizar $($_.DriveLetter):" }
-}`, nil)
-		if err != nil {
-			j.log("[!!] Error al optimizar discos: " + err.Error())
+		for _, d := range fixedDisks() {
+			if j.cancelled() {
+				break
+			}
+			if !strings.EqualFold(d.FS, "NTFS") {
+				continue
+			}
+			if err := runNative(j, "defrag.exe", d.Letter, "/O"); err != nil {
+				j.log("[!!] No se pudo optimizar " + d.Letter + " (" + err.Error() + ")")
+			} else {
+				j.log("[OK] Disco " + d.Letter + " optimizado")
+			}
 		}
 	}
 	if sel["storage"] {
-		k := `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy`
-		e1 := runNative(j, "reg", "add", k, "/v", "01", "/t", "REG_DWORD", "/d", "1", "/f")
-		e2 := runNative(j, "reg", "add", k, "/v", "2048", "/t", "REG_DWORD", "/d", "1", "/f")
+		k := `SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy`
+		e1 := setDword(registry.CURRENT_USER, k, "01", 1)
+		e2 := setDword(registry.CURRENT_USER, k, "2048", 1)
 		if e1 != nil || e2 != nil {
 			j.log("[!!] No se pudo configurar el Sensor de almacenamiento")
 		} else {
@@ -287,6 +334,13 @@ func runOptimizar(j *Job, ids []string) {
 			j.log("[!!] No se pudo vaciar la caché DNS")
 		} else {
 			j.log("[OK] Caché DNS vaciada")
+		}
+	}
+	if sel["hibernate"] {
+		if err := runNative(j, "powercfg", "/hibernate", "off"); err != nil {
+			j.log("[!!] No se pudo desactivar la hibernación")
+		} else {
+			j.log("[OK] Hibernación desactivada (se libera el archivo hiberfil.sys)")
 		}
 	}
 	if sel["dismcheck"] {
@@ -301,60 +355,64 @@ func runOptimizar(j *Job, ids []string) {
 	j.log("[OK] OPTIMIZACIÓN COMPLETADA. Se recomienda reiniciar el equipo.")
 }
 
-// ------------------------------------------------------------ diagnostico
+// ------------------------------------------------------------ reparacion
 
-const psDiag = `
-$os  = Get-CimInstance Win32_OperatingSystem
-$cs  = Get-CimInstance Win32_ComputerSystem
-$cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
-[pscustomobject]@{
-  equipo   = $cs.Name
-  windows  = "$($os.Caption) $($os.Version)"
-  cpu      = $cpu.Name.Trim()
-  ramTotal = [double]$cs.TotalPhysicalMemory
-  ramLibre = [double]($os.FreePhysicalMemory * 1KB)
-  horas    = [int]((Get-Date) - $os.LastBootUpTime).TotalHours
-  discos   = @(Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | ForEach-Object {
-               [pscustomobject]@{ letra=$_.DeviceID; libre=[double]$_.FreeSpace; total=[double]$_.Size } })
-  top      = @(Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 10 | ForEach-Object {
-               [pscustomobject]@{ nombre=$_.ProcessName; bytes=[double]$_.WorkingSet64 } })
-  salud    = @(Get-PhysicalDisk -ErrorAction SilentlyContinue | ForEach-Object {
-               [pscustomobject]@{ nombre=$_.FriendlyName; estado="$($_.HealthStatus)" } })
-} | ConvertTo-Json -Depth 5 -Compress
-`
-
-func runDiagnostico() map[string]interface{} {
-	res := map[string]interface{}{}
-	out, err := psOutput(psDiag, nil)
-	if err != nil {
-		res["error"] = err.Error()
-	} else {
-		var v interface{}
-		if json.Unmarshal([]byte(out), &v) == nil {
-			res["sistema"] = v
+func runReparar(j *Job, ids []string) {
+	sel := map[string]bool{}
+	for _, id := range ids {
+		sel[id] = true
+	}
+	j.log("== REPARACIÓN DEL SISTEMA ==")
+	steps := []struct {
+		id, title string
+		exe       string
+		args      []string
+	}{
+		{"dism_scan", "DISM: buscar daños en la imagen de Windows", "Dism.exe", []string{"/Online", "/Cleanup-Image", "/ScanHealth"}},
+		{"dism_restore", "DISM: reparar la imagen de Windows (necesita Internet)", "Dism.exe", []string{"/Online", "/Cleanup-Image", "/RestoreHealth"}},
+		{"sfc", "SFC: verificar y reparar archivos del sistema", "sfc.exe", []string{"/scannow"}},
+		{"chkdsk", "CHKDSK: comprobar el disco del sistema (sin reiniciar)", "chkdsk.exe", []string{strings.TrimSuffix(env("SystemDrive"), `\`), "/scan"}},
+	}
+	for _, s := range steps {
+		if !sel[s.id] || j.cancelled() {
+			continue
+		}
+		j.log("")
+		j.log(">> " + s.title)
+		if err := runNative(j, s.exe, s.args...); err != nil {
+			if j.cancelled() {
+				j.log("[!!] Cancelado por el usuario")
+				return
+			}
+			j.log("[!!] " + s.exe + " terminó con aviso: " + err.Error() + " (revisa el detalle de arriba)")
 		} else {
-			res["error"] = "respuesta inesperada de PowerShell"
+			j.log("[OK] " + s.title + ": terminado")
 		}
 	}
-	items := scanLimpieza()
-	var total int64
-	for _, it := range items {
-		total += it.Bytes
-	}
-	res["basura"] = items
-	res["basuraTotal"] = total
-	return res
+	j.log("")
+	j.log("[OK] PROCESO FINALIZADO")
 }
 
 // ------------------------------------------------------------ arranque
 
-const psStartupDefs = `
-$defs = @(
-  @{ s='HKLM';   p='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run';              a='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run' },
-  @{ s='HKLM32'; p='HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run';  a='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32' },
-  @{ s='HKCU';   p='HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run';              a='HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run' }
-)
-`
+type startupDef struct {
+	Scope, Run, Approved string
+	Root, ARoot          registry.Key
+	Folder               string
+}
+
+func startupDefs() []startupDef {
+	const base = `SOFTWARE\Microsoft\Windows\CurrentVersion`
+	return []startupDef{
+		{Scope: "HKLM", Root: registry.LOCAL_MACHINE, Run: base + `\Run`, ARoot: registry.LOCAL_MACHINE, Approved: base + `\Explorer\StartupApproved\Run`},
+		{Scope: "HKLM32", Root: registry.LOCAL_MACHINE, Run: `SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run`, ARoot: registry.LOCAL_MACHINE, Approved: base + `\Explorer\StartupApproved\Run32`},
+		{Scope: "HKCU", Root: registry.CURRENT_USER, Run: base + `\Run`, ARoot: registry.CURRENT_USER, Approved: base + `\Explorer\StartupApproved\Run`},
+		{Scope: "CARPETA_USUARIO", ARoot: registry.CURRENT_USER, Approved: base + `\Explorer\StartupApproved\StartupFolder`,
+			Folder: join(env("APPDATA"), `Microsoft\Windows\Start Menu\Programs\Startup`)},
+		{Scope: "CARPETA_COMUN", ARoot: registry.LOCAL_MACHINE, Approved: base + `\Explorer\StartupApproved\StartupFolder`,
+			Folder: join(env("ProgramData"), `Microsoft\Windows\Start Menu\Programs\Startup`)},
+	}
+}
 
 type startupItem struct {
 	Scope   string `json:"scope"`
@@ -363,69 +421,80 @@ type startupItem struct {
 	Enabled bool   `json:"enabled"`
 }
 
-func listStartup() interface{} {
-	out, err := psOutput(psStartupDefs+`
-$items = @()
-foreach ($d in $defs) {
-  if (Test-Path $d.p) {
-    $k = Get-Item $d.p
-    $ap = $null; if (Test-Path $d.a) { $ap = Get-ItemProperty $d.a }
-    foreach ($n in $k.GetValueNames()) {
-      if (-not $n) { continue }
-      $en = $true
-      if ($ap) { $v = $ap.$n; if ($v -is [byte[]] -and $v.Length -gt 0 -and (($v[0] -band 1) -eq 1)) { $en = $false } }
-      $items += [pscustomobject]@{ scope=$d.s; name=$n; cmd=[string]$k.GetValue($n); enabled=$en }
-    }
-  }
-}
-ConvertTo-Json -InputObject @($items) -Compress`, nil)
+func approvedEnabled(d startupDef, name string) bool {
+	k, err := registry.OpenKey(d.ARoot, d.Approved, registry.QUERY_VALUE)
 	if err != nil {
-		return map[string]string{"error": err.Error()}
+		return true
 	}
-	var v []startupItem
-	if json.Unmarshal([]byte(out), &v) != nil {
-		return map[string]string{"error": "respuesta inesperada de PowerShell"}
+	defer k.Close()
+	b, _, err := k.GetBinaryValue(name)
+	if err != nil || len(b) == 0 {
+		return true
 	}
-	return v
+	return b[0]&1 == 0 // 02/06 = activo, 03/07 = desactivado
+}
+
+func listStartup() []startupItem {
+	out := []startupItem{}
+	for _, d := range startupDefs() {
+		if d.Folder != "" {
+			ents, _ := os.ReadDir(d.Folder)
+			for _, e := range ents {
+				if e.IsDir() || strings.EqualFold(e.Name(), "desktop.ini") {
+					continue
+				}
+				out = append(out, startupItem{Scope: d.Scope, Name: e.Name(), Cmd: filepath.Join(d.Folder, e.Name()), Enabled: approvedEnabled(d, e.Name())})
+			}
+			continue
+		}
+		k, err := registry.OpenKey(d.Root, d.Run, registry.QUERY_VALUE)
+		if err != nil {
+			continue
+		}
+		names, _ := k.ReadValueNames(-1)
+		for _, n := range names {
+			if n == "" {
+				continue
+			}
+			v, _, _ := k.GetStringValue(n)
+			out = append(out, startupItem{Scope: d.Scope, Name: n, Cmd: v, Enabled: approvedEnabled(d, n)})
+		}
+		k.Close()
+	}
+	return out
 }
 
 func setStartupEnabled(scope, name string, enabled bool) error {
-	// Solo se permite actuar sobre entradas que existen realmente.
 	found := false
-	if l, ok := listStartup().([]startupItem); ok {
-		for _, it := range l {
-			if it.Scope == scope && it.Name == name {
-				found = true
-			}
+	for _, it := range listStartup() {
+		if it.Scope == scope && it.Name == name {
+			found = true
 		}
 	}
 	if !found {
 		return errors.New("entrada de inicio no encontrada")
 	}
-	en := "0"
-	if enabled {
-		en = "1"
+	for _, d := range startupDefs() {
+		if d.Scope != scope {
+			continue
+		}
+		k, _, err := registry.CreateKey(d.ARoot, d.Approved, registry.SET_VALUE)
+		if err != nil {
+			return err
+		}
+		defer k.Close()
+		b := make([]byte, 12)
+		if enabled {
+			b[0] = 2
+		} else {
+			b[0] = 3
+		}
+		return k.SetBinaryValue(name, b)
 	}
-	_, err := psOutput(psStartupDefs+`
-$d = $defs | Where-Object { $_.s -eq $env:OPT_SCOPE } | Select-Object -First 1
-if (-not $d) { throw 'ambito invalido' }
-if (-not (Test-Path $d.a)) { New-Item -Path $d.a -Force | Out-Null }
-$b = New-Object byte[] 12
-if ($env:OPT_EN -eq '1') { $b[0] = 2 } else { $b[0] = 3 }
-Set-ItemProperty -Path $d.a -Name $env:OPT_NAME -Value $b -Type Binary -ErrorAction Stop`,
-		map[string]string{"OPT_SCOPE": scope, "OPT_NAME": name, "OPT_EN": en})
-	return err
+	return errors.New("ámbito inválido")
 }
 
 // ------------------------------------------------------------ programas
-
-const psUninstallDefs = `
-$roots = @{
-  HKLM   = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
-  HKLM32 = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
-  HKCU   = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
-}
-`
 
 type programa struct {
 	ID        string  `json:"id"`
@@ -436,94 +505,167 @@ type programa struct {
 	Instalado string  `json:"instalado"`
 }
 
-func listProgramas() interface{} {
-	out, err := psOutput(psUninstallDefs+`
-$list = foreach ($h in $roots.Keys) {
-  Get-ChildItem -LiteralPath $roots[$h] -ErrorAction SilentlyContinue | ForEach-Object {
-    $p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
-    if ($p.DisplayName -and $p.UninstallString -and -not $p.SystemComponent -and -not $p.ParentKeyName) {
-      [pscustomobject]@{ id="$h|$($_.PSChildName)"; nombre=([string]$p.DisplayName).Trim(); version=[string]$p.DisplayVersion;
-        editor=[string]$p.Publisher; mb=$(if ($p.EstimatedSize) { [math]::Round($p.EstimatedSize/1024,1) } else { 0 }); instalado=[string]$p.InstallDate }
-    }
-  }
-}
-$list = @($list | Sort-Object nombre -Unique)
-ConvertTo-Json -InputObject $list -Compress`, nil)
-	if err != nil {
-		return map[string]string{"error": err.Error()}
-	}
-	var v []programa
-	if json.Unmarshal([]byte(out), &v) != nil {
-		return map[string]string{"error": "respuesta inesperada de PowerShell"}
-	}
-	sort.Slice(v, func(a, b int) bool { return strings.ToLower(v[a].Nombre) < strings.ToLower(v[b].Nombre) })
-	return v
+const uninstBase = `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`
+
+var uninstRoots = []struct {
+	Tag  string
+	Root registry.Key
+	Path string
+}{
+	{"HKLM", registry.LOCAL_MACHINE, uninstBase},
+	{"HKLM32", registry.LOCAL_MACHINE, `SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`},
+	{"HKCU", registry.CURRENT_USER, uninstBase},
 }
 
-// desinstalar: el cliente solo manda un ID; el comando real se lee del registro aqui.
+func listProgramas() []programa {
+	seen := map[string]bool{}
+	out := []programa{}
+	for _, r := range uninstRoots {
+		for _, sk := range regSubkeys(r.Root, r.Path) {
+			p := r.Path + `\` + sk
+			name := strings.TrimSpace(regStr(r.Root, p, "DisplayName"))
+			un := regStr(r.Root, p, "UninstallString")
+			if name == "" || un == "" || seen[strings.ToLower(name)] {
+				continue
+			}
+			if v, ok := regDword(r.Root, p, "SystemComponent"); ok && v == 1 {
+				continue
+			}
+			if regStr(r.Root, p, "ParentKeyName") != "" {
+				continue
+			}
+			size, _ := regDword(r.Root, p, "EstimatedSize")
+			seen[strings.ToLower(name)] = true
+			out = append(out, programa{ID: r.Tag + "|" + sk, Nombre: name, Version: regStr(r.Root, p, "DisplayVersion"),
+				Editor: regStr(r.Root, p, "Publisher"), MB: float64(size) / 1024, Instalado: regStr(r.Root, p, "InstallDate")})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Nombre) < strings.ToLower(out[j].Nombre) })
+	return out
+}
+
 func desinstalar(id string) (string, error) {
 	parts := strings.SplitN(id, "|", 2)
 	if len(parts) != 2 || strings.ContainsAny(parts[1], `\/`) {
-		return "", errors.New("identificador invalido")
+		return "", errors.New("identificador inválido")
 	}
-	out, err := psOutput(psUninstallDefs+`
-$h, $k = $env:OPT_ID -split '\|', 2
-if (-not $roots.ContainsKey($h)) { throw 'ambito invalido' }
-$p = Get-ItemProperty -LiteralPath (Join-Path $roots[$h] $k) -ErrorAction Stop
-ConvertTo-Json -Compress -InputObject ([pscustomobject]@{ nombre=[string]$p.DisplayName; cmd=[string]$p.UninstallString })`,
-		map[string]string{"OPT_ID": id})
-	if err != nil {
-		return "", err
+	for _, r := range uninstRoots {
+		if r.Tag != parts[0] {
+			continue
+		}
+		p := r.Path + `\` + parts[1]
+		cmd := strings.TrimSpace(regStr(r.Root, p, "UninstallString"))
+		name := regStr(r.Root, p, "DisplayName")
+		if cmd == "" {
+			return "", errors.New("no se encontró el desinstalador de este programa")
+		}
+		if err := lanzarDesinstalador(cmd); err != nil {
+			return "", err
+		}
+		return "Desinstalador iniciado para: " + name + ". Completa su ventana si aparece.", nil
 	}
-	var r struct{ Nombre, Cmd string }
-	if json.Unmarshal([]byte(out), &r) != nil || strings.TrimSpace(r.Cmd) == "" {
-		return "", errors.New("no se encontro el desinstalador")
-	}
-	if err := lanzarDesinstalador(r.Cmd); err != nil {
-		return "", err
-	}
-	return "Desinstalador iniciado para: " + r.Nombre + ". Completa su ventana si aparece.", nil
+	return "", errors.New("origen inválido")
 }
 
-// ------------------------------------------------------------ usuarios
+// ------------------------------------------------------------ apps de la Tienda (PowerShell)
+
+type appx struct {
+	ID      string `json:"id"`
+	Nombre  string `json:"nombre"`
+	Editor  string `json:"editor"`
+	Version string `json:"version"`
+}
+
+var appxProtegidas = []string{"microsoft.vclibs", "microsoft.ui.xaml", "microsoft.net", "microsoft.windowsstore", "microsoft.desktopappinstaller",
+	"microsoft.sechealthui", "microsoft.windows.", "microsoftwindows.", "windows.", "microsoft.windowsappruntime", "microsoft.services.store",
+	"microsoft.storepurchaseapp", "microsoft.aad", "microsoft.accountscontrol", "microsoft.lockapp", "microsoft.creddialoghost", "microsoft.win32webviewhost",
+	"microsoft.bioenrollment", "microsoft.asynctextservice", "microsoft.microsoftedge", "nvidia", "realtek", "intel", "amd", "microsoft.hevc", "microsoft.heif", "microsoft.webp", "microsoft.vp9"}
+
+func listAppx() ([]appx, error) {
+	out, err := psOutput(`
+$l = @(Get-AppxPackage | Where-Object { -not $_.IsFramework -and -not $_.NonRemovable -and $_.SignatureKind -ne 'System' } | ForEach-Object {
+  [pscustomobject]@{ id=$_.PackageFullName; nombre=$_.Name; editor=([string]$_.Publisher -replace '^CN=([^,]+).*','$1'); version=[string]$_.Version } } | Sort-Object nombre)
+ConvertTo-Json -InputObject $l -Compress`, nil)
+	if err != nil {
+		return nil, err
+	}
+	var all []appx
+	if out == "" || json.Unmarshal([]byte(out), &all) != nil {
+		return []appx{}, nil
+	}
+	res := []appx{}
+next:
+	for _, a := range all {
+		low := strings.ToLower(a.Nombre)
+		for _, p := range appxProtegidas {
+			if strings.HasPrefix(low, p) {
+				continue next
+			}
+		}
+		res = append(res, a)
+	}
+	return res, nil
+}
+
+func quitarAppx(id string) error {
+	l, err := listAppx()
+	if err != nil {
+		return err
+	}
+	ok := false
+	for _, a := range l {
+		if a.ID == id {
+			ok = true
+		}
+	}
+	if !ok {
+		return errors.New("aplicación no encontrada o protegida")
+	}
+	_, err = psOutput(`Get-AppxPackage | Where-Object { $_.PackageFullName -eq $env:OPT_ID } | Remove-AppxPackage -ErrorAction Stop`, map[string]string{"OPT_ID": id})
+	return err
+}
+
+// ------------------------------------------------------------ usuarios (PowerShell)
 
 type usuario struct {
 	Name  string `json:"name"`
 	Admin bool   `json:"admin"`
 }
 
-func listUsuarios() interface{} {
+func listUsuarios() ([]usuario, error) {
 	out, err := psOutput(`
 $g = Get-LocalGroup | Where-Object { $_.SID -eq 'S-1-5-32-544' }
 $adm = @(Get-LocalGroupMember -Group $g.Name -ErrorAction SilentlyContinue | ForEach-Object { ($_.Name -split '\\')[-1] })
 $u = @(Get-LocalUser | Where-Object { $_.Enabled } | ForEach-Object { [pscustomobject]@{ name=$_.Name; admin=($adm -contains $_.Name) } })
 ConvertTo-Json -InputObject $u -Compress`, nil)
 	if err != nil {
-		return map[string]string{"error": err.Error()}
+		return nil, err
 	}
 	var v []usuario
 	if json.Unmarshal([]byte(out), &v) != nil {
-		return map[string]string{"error": "respuesta inesperada de PowerShell"}
+		return nil, errors.New("respuesta inesperada de PowerShell")
 	}
-	return v
+	return v, nil
 }
 
 func hacerAdmin(user string) (string, error) {
+	l, err := listUsuarios()
+	if err != nil {
+		return "", err
+	}
 	ok := false
-	if l, isList := listUsuarios().([]usuario); isList {
-		for _, u := range l {
-			if u.Name == user {
-				ok = true
-				if u.Admin {
-					return "'" + user + "' ya es administrador de este equipo.", nil
-				}
+	for _, u := range l {
+		if u.Name == user {
+			ok = true
+			if u.Admin {
+				return "'" + user + "' ya es administrador de este equipo.", nil
 			}
 		}
 	}
 	if !ok {
 		return "", errors.New("el usuario no existe en este equipo")
 	}
-	_, err := psOutput(`
+	_, err = psOutput(`
 $g = Get-LocalGroup | Where-Object { $_.SID -eq 'S-1-5-32-544' }
 Add-LocalGroupMember -Group $g.Name -Member $env:OPT_USER -ErrorAction Stop`, map[string]string{"OPT_USER": user})
 	if err != nil {

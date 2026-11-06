@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 //go:embed payload/OptimizadorPC.exe
@@ -19,7 +21,7 @@ var payload []byte
 
 const (
 	appName    = "Optimizador PC"
-	appVersion = "1.0.0"
+	appVersion = "1.1.0"
 	publisher  = "Optimizador PC"
 	exeName    = "OptimizadorPC.exe"
 	uninstName = "Desinstalar.exe"
@@ -36,19 +38,21 @@ var (
 func u16(s string) *uint16 { p, _ := syscall.UTF16PtrFromString(s); return p }
 
 // msg: flags 0x24 = Si/No + pregunta; 0x40 = info; 0x10 = error. Devuelve 6 = Si.
+var silent bool
+
 func msg(text string, flags uintptr) uintptr {
+	if silent { // modo /S: sin ventanas; responde "Si" salvo a "abrir ahora"
+		fmt.Println(text)
+		if flags == 0x24 && strings.Contains(text, "abrirlo") {
+			return 7
+		}
+		return 6
+	}
 	r, _, _ := procMsg.Call(0, uintptr(unsafe.Pointer(u16(text))), uintptr(unsafe.Pointer(u16(appName))), flags)
 	return r
 }
 
-func isAdmin() bool {
-	f, err := os.Open(`\\.\PHYSICALDRIVE0`)
-	if err != nil {
-		return false
-	}
-	f.Close()
-	return true
-}
+func isAdmin() bool { return windows.GetCurrentProcessToken().IsElevated() }
 
 func elevate() bool {
 	exe, _ := os.Executable()
@@ -169,7 +173,16 @@ func uninstall() {
 }
 
 func main() {
-	if !isAdmin() {
+	noElev := false
+	for _, a := range os.Args[1:] {
+		if strings.EqualFold(a, "/S") {
+			silent = true
+		}
+		if a == "--no-elevate" {
+			noElev = true
+		}
+	}
+	if !noElev && !isAdmin() {
 		if elevate() {
 			return
 		}

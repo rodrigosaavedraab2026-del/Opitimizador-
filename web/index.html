@@ -5,85 +5,222 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Optimizador PC</title>
 <style>
+  /* Dirección: panel de instrumentos. Grafito frío + una sola señal ámbar. Cifras en monoespaciada.
+     Distribución: barra lateral agrupada + cabecera de página + contenido en bloques. */
   :root{
-    --bg:#0f1420; --panel:#171e2e; --panel2:#1e2740; --line:#2a3552; --txt:#e6ebf5; --mut:#8d9bb8;
-    --acc:#3b82f6; --acc2:#2563eb; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444;
+    --bg:#f1f3f6; --surface:#ffffff; --surface2:#eaedf2; --line:#d9dde4; --line2:#c6ccd6;
+    --txt:#161a21; --mut:#586172; --acc:#a85f00; --acc-hi:#8f5000; --acc-ink:#ffffff; --acc-soft:#fbeed6;
+    --ok:#15803d; --ok-soft:#dcf3e4; --warn:#a16207; --warn-soft:#fbefc9; --bad:#b91c1c; --bad-soft:#fbe0e0;
+    --shadow:0 1px 2px rgba(20,26,36,.06),0 4px 14px rgba(20,26,36,.05);
+    --f-ui:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+    --f-mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,monospace;
+    --r:10px; --r-sm:7px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#111419; --surface:#1a1e25; --surface2:#232832; --line:#2b313c; --line2:#3a4250;
+      --txt:#e8ebf0; --mut:#9aa3b2; --acc:#f2a93b; --acc-hi:#ffbd5c; --acc-ink:#1b1405; --acc-soft:#3a2b10;
+      --ok:#4cc38a; --ok-soft:#14301f; --warn:#e8b64a; --warn-soft:#3a2f12; --bad:#f07178; --bad-soft:#3b1a1d;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.25); color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#111419; --surface:#1a1e25; --surface2:#232832; --line:#2b313c; --line2:#3a4250;
+    --txt:#e8ebf0; --mut:#9aa3b2; --acc:#f2a93b; --acc-hi:#ffbd5c; --acc-ink:#1b1405; --acc-soft:#3a2b10;
+    --ok:#4cc38a; --ok-soft:#14301f; --warn:#e8b64a; --warn-soft:#3a2f12; --bad:#f07178; --bad-soft:#3b1a1d;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.25); color-scheme:dark;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
-  .app{display:grid;grid-template-columns:210px 1fr;height:100%}
-  nav{background:var(--panel);border-right:1px solid var(--line);padding:16px 10px;display:flex;flex-direction:column;gap:4px}
-  .brand{font-weight:700;font-size:16px;padding:6px 10px 14px;display:flex;align-items:center;gap:8px}
-  .brand i{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--acc),#22d3ee);display:inline-block}
-  nav button{all:unset;cursor:pointer;padding:9px 12px;border-radius:8px;color:var(--mut);display:flex;gap:10px;align-items:center}
-  nav button:hover{background:var(--panel2);color:var(--txt)}
-  nav button.on{background:var(--panel2);color:var(--txt);box-shadow:inset 3px 0 0 var(--acc)}
-  .spacer{flex:1}
-  .badge{font-size:12px;padding:6px 10px;border-radius:8px;background:var(--panel2);color:var(--mut)}
-  .badge.ok{color:var(--ok)} .badge.bad{color:var(--warn)}
-  main{overflow:auto;padding:22px 26px}
-  h1{margin:0 0 4px;font-size:22px} .sub{color:var(--mut);margin:0 0 18px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
-  .card h3{margin:0 0 10px;font-size:14px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
-  .stat b{display:block;font-size:20px} .stat span{color:var(--mut);font-size:12px}
-  .bar{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:6px 0 2px}
-  .bar>div{height:100%;background:var(--acc)} .bar.low>div{background:var(--bad)}
-  button.btn{all:unset;cursor:pointer;background:var(--acc);color:#fff;padding:9px 16px;border-radius:8px;font-weight:600}
-  button.btn:hover{background:var(--acc2)} button.btn[disabled]{opacity:.5;cursor:default}
-  button.sec{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
-  button.sec:hover{background:#27324f}
-  button.danger{background:var(--bad)} button.danger:hover{background:#dc2626}
-  button.sm{padding:5px 10px;font-weight:500;font-size:13px}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--txt);font:14px/1.5 var(--f-ui);-webkit-font-smoothing:antialiased}
+  .num,.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+  svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+  .app{display:grid;grid-template-columns:244px minmax(0,1fr);height:100%}
+  /* ---- barra lateral */
+  nav{background:var(--surface);border-right:1px solid var(--line);padding:18px 12px 12px;display:flex;flex-direction:column;overflow:auto}
+  .brand{display:flex;align-items:center;gap:10px;padding:2px 10px 18px}
+  .logo{width:30px;height:30px;border-radius:8px;background:var(--txt);color:var(--bg);display:grid;place-items:center}
+  .brand b{font-size:15px;letter-spacing:.01em;display:block;line-height:1.1}
+  .brand span{font-size:11px;color:var(--mut)}
+  .grp{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);padding:14px 12px 6px}
+  nav button.nv{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:11px;padding:8px 12px;border-radius:var(--r-sm);cursor:pointer;color:var(--mut)}
+  nav button.nv:hover{background:var(--surface2);color:var(--txt)}
+  nav button.nv[aria-current="page"]{background:var(--acc-soft);color:var(--txt);font-weight:600;box-shadow:inset 2px 0 0 var(--acc)}
+  nav button.nv[aria-current="page"] svg{color:var(--acc)}
+  .sp{flex:1;min-height:12px}
+  .foot{display:flex;align-items:center;gap:8px;padding:10px 6px 2px;border-top:1px solid var(--line);margin-top:10px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 9px;border-radius:99px;background:var(--surface2);color:var(--mut)}
+  .chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.bad{background:var(--warn-soft);color:var(--warn)}
+  .chip.off{background:var(--bad-soft);color:var(--bad)}
+  .chip i{width:7px;height:7px;border-radius:50%;background:currentColor}
+  .iconbtn{all:unset;cursor:pointer;width:32px;height:32px;display:grid;place-items:center;border-radius:var(--r-sm);color:var(--mut);margin-left:auto}
+  .iconbtn:hover{background:var(--surface2);color:var(--txt)}
+
+  /* ---- contenido */
+  main{overflow:auto;padding:26px clamp(18px,3vw,38px) 40px}
+  header.ph{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  header.ph h1{margin:0;font-size:26px;font-weight:650;letter-spacing:-.01em;line-height:1.15;text-wrap:balance}
+  header.ph p{margin:4px 0 0;color:var(--mut);max-width:70ch}
+  header.ph .act{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow);margin-bottom:16px}
+  .card>h3,.lbl{margin:0 0 12px;font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--mut)}
+  .grid{display:grid;gap:16px;margin-bottom:16px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+  .grid>.card{margin:0}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .mut{color:var(--mut)} .small{font-size:12.5px}
+
+  button.btn{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:var(--r-sm);font-weight:600;background:var(--acc);color:var(--acc-ink);white-space:nowrap}
+  button.btn:hover{background:var(--acc-hi)}
+  button.btn.sec{background:var(--surface);color:var(--txt);border:1px solid var(--line2)}
+  button.btn.sec:hover{background:var(--surface2)}
+  button.btn.danger{background:var(--bad);color:#fff} button.btn.danger:hover{filter:brightness(.92)}
+  button.btn.sm{padding:4px 11px;font-size:13px;font-weight:550}
+  button.btn[disabled]{opacity:.45;cursor:not-allowed}
+  :focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:4px}
+  input[type=text],input[type=search],select{font:inherit;color:var(--txt);background:var(--surface);border:1px solid var(--line2);border-radius:var(--r-sm);padding:7px 11px;min-width:0}
+  input[type=search]{min-width:240px}
+  select{padding-right:26px}
+
   table{width:100%;border-collapse:collapse}
-  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
-  th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase}
-  tr:hover td{background:rgba(255,255,255,.02)}
-  td.num{text-align:right;white-space:nowrap}
-  .chk{display:flex;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);align-items:flex-start}
-  .chk:last-child{border:0} .chk input{margin-top:3px;accent-color:var(--acc);width:16px;height:16px}
-  .chk .t{flex:1} .chk small{display:block;color:var(--mut)} .chk .sz{color:var(--mut);white-space:nowrap}
-  .log{background:#0a0e17;border:1px solid var(--line);border-radius:10px;padding:12px;font:12.5px/1.5 Consolas,monospace;
-       max-height:280px;overflow:auto;white-space:pre-wrap;margin-top:12px;display:none}
-  .log.show{display:block} .l-ok{color:var(--ok)} .l-warn{color:var(--warn)}
-  input[type=text],input[type=search]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:8px 12px;border-radius:8px;min-width:260px}
-  .pill{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--panel2);color:var(--mut)}
-  .pill.ok{color:var(--ok)} .pill.off{color:var(--warn)}
-  .sw{position:relative;width:38px;height:22px;display:inline-block}
-  .sw input{display:none} .sw span{position:absolute;inset:0;background:var(--line);border-radius:99px;cursor:pointer;transition:.15s}
-  .sw span:before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s}
-  .sw input:checked+span{background:var(--ok)} .sw input:checked+span:before{transform:translateX(16px)}
-  .toast{position:fixed;right:20px;bottom:20px;background:var(--panel2);border:1px solid var(--line);padding:12px 16px;border-radius:10px;max-width:380px;display:none;z-index:9}
-  .toast.show{display:block}
-  .note{color:var(--mut);font-size:12.5px}
-  .empty{color:var(--mut);padding:18px;text-align:center}
-  .cmd{color:var(--mut);font:12px Consolas,monospace;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  @media(max-width:760px){.app{grid-template-columns:1fr}nav{flex-direction:row;overflow:auto}.brand,.spacer,.badge{display:none}}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);white-space:nowrap}
+  th.s{cursor:pointer;user-select:none} th.s:hover{color:var(--txt)}
+  tbody tr:hover td{background:var(--surface2)}
+  tr:last-child td{border-bottom:0}
+  td.r,th.r{text-align:right}
+  .tw{overflow-x:auto}
+  .trunc{max-width:46ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cmd{font:12px var(--f-mono);color:var(--mut)}
+
+  /* opciones con casilla */
+  .opt{display:flex;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line);align-items:flex-start;cursor:pointer}
+  .opt:last-child{border-bottom:0}
+  .opt input{accent-color:var(--acc);width:17px;height:17px;margin-top:2px;flex:none}
+  .opt .t{flex:1;min-width:0} .opt small{display:block;color:var(--mut);margin-top:1px}
+  .opt .sz{font:13px var(--f-mono);color:var(--mut);white-space:nowrap}
+  .optgrp{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);padding:14px 2px 4px}
+  .optgrp:first-child{padding-top:0}
+
+  /* interruptor */
+  .sw{position:relative;width:40px;height:22px;display:inline-block;flex:none}
+  .sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+  .sw span{position:absolute;inset:0;background:var(--line2);border-radius:99px;transition:background .15s}
+  .sw span:before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+  .sw input:checked+span{background:var(--ok)} .sw input:checked+span:before{transform:translateX(18px)}
+  .sw input:focus-visible+span{outline:2px solid var(--acc);outline-offset:2px}
+  .sw input:disabled{cursor:not-allowed} .sw input:disabled+span{opacity:.5}
+  .setrow{display:flex;gap:14px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--line)}
+  .setrow:last-child{border-bottom:0} .setrow .t{flex:1;min-width:0} .setrow small{display:block;color:var(--mut)}
+
+  /* consola de tareas */
+  .log{background:#0d1014;color:#d7dde7;border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;font:12.5px/1.55 var(--f-mono);max-height:320px;overflow:auto;white-space:pre-wrap;margin-top:14px;display:none}
+  .log.show{display:block} .log .ok{color:#59d398} .log .wr{color:#f1b94c} .log .hd{color:#8fb4ff}
+  .prog{display:none;align-items:center;gap:10px;margin-top:12px;color:var(--mut)}
+  .prog.show{display:flex}
+  .spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--line2);border-top-color:var(--acc);animation:sp .8s linear infinite;flex:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .loading{display:flex;align-items:center;gap:12px;color:var(--mut);padding:30px 4px}
+
+  /* paneles de medida */
+  .meter{display:flex;align-items:center;gap:16px}
+  .ring{position:relative;width:104px;height:104px;flex:none}
+  .ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+  .ring circle{fill:none;stroke-width:10;stroke-linecap:round}
+  .ring .bg{stroke:var(--surface2)} .ring .fg{transition:stroke-dashoffset .6s,stroke .3s}
+  .ring .v{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font:600 22px var(--f-mono)}
+  .ring .v small{display:block;font:500 11px var(--f-ui);color:var(--mut);margin-top:-4px}
+  .bar{height:8px;background:var(--surface2);border-radius:99px;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--acc);border-radius:99px}
+  .bar.low>i{background:var(--bad)} .bar.mid>i{background:var(--warn)}
+  .spark{width:100%;height:46px;display:block}
+  .spark polyline{fill:none;stroke:var(--acc);stroke-width:1.6;vector-effect:non-scaling-stroke}
+  .spark path{fill:var(--acc-soft);stroke:none}
+  .big{font:600 30px/1.1 var(--f-mono);letter-spacing:-.02em}
+  .kv{display:grid;grid-template-columns:max-content 1fr;gap:7px 20px}
+  .kv dt{color:var(--mut)} .kv dd{margin:0;word-break:break-word}
+  .rec{display:flex;gap:12px;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line)}
+  .rec:last-child{border-bottom:0} .rec .t{flex:1;min-width:0} .rec small{display:block;color:var(--mut)}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--ok)} .dot.w{background:var(--warn)} .dot.b{background:var(--bad)}
+  .pill{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:99px;background:var(--surface2);color:var(--mut);white-space:nowrap}
+  .pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.w{background:var(--warn-soft);color:var(--warn)} .pill.b{background:var(--bad-soft);color:var(--bad)}
+  .filters{display:flex;gap:6px;flex-wrap:wrap}
+  .fchip{all:unset;cursor:pointer;padding:5px 12px;border-radius:99px;border:1px solid var(--line2);font-size:13px;color:var(--mut)}
+  .fchip:hover{background:var(--surface2)} .fchip[aria-pressed="true"]{background:var(--txt);color:var(--bg);border-color:var(--txt)}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px}
+  .tab{all:unset;cursor:pointer;padding:9px 16px;color:var(--mut);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab[aria-selected="true"]{color:var(--txt);border-bottom-color:var(--acc);font-weight:600}
+  .empty{text-align:center;color:var(--mut);padding:34px 10px}
+  .sizebar{height:5px;background:var(--surface2);border-radius:3px;margin-top:5px;min-width:90px}
+  .sizebar i{display:block;height:100%;background:var(--acc);border-radius:3px}
+  .dupgrp{border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:10px;overflow:hidden}
+  .dupgrp>.h{display:flex;gap:10px;align-items:center;padding:8px 12px;background:var(--surface2);font-size:13px}
+  .dupgrp label{display:flex;gap:10px;align-items:center;padding:7px 12px;border-top:1px solid var(--line);cursor:pointer}
+  .dupgrp input{accent-color:var(--acc);width:16px;height:16px}
+  .banner{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-radius:var(--r-sm);background:var(--warn-soft);color:var(--txt);margin-bottom:16px;font-size:13.5px}
+  .banner svg{color:var(--warn);margin-top:2px}
+
+  /* aviso y confirmación */
+  .toast{position:fixed;right:22px;bottom:22px;background:var(--txt);color:var(--bg);padding:11px 16px;border-radius:var(--r-sm);max-width:420px;box-shadow:var(--shadow);opacity:0;transform:translateY(8px);pointer-events:none;transition:.2s;z-index:50}
+  .toast.show{opacity:1;transform:none}
+  .modal-bg{position:fixed;inset:0;background:rgba(10,12,16,.55);display:none;place-items:center;z-index:60;padding:20px}
+  .modal-bg.show{display:grid}
+  .modal{background:var(--surface);border:1px solid var(--line2);border-radius:12px;padding:22px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  .modal h2{margin:0 0 8px;font-size:18px} .modal p{margin:0 0 18px;color:var(--mut);white-space:pre-line}
+  .modal .row{justify-content:flex-end}
+
+  @media (max-width:860px){.app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+    nav{flex-direction:row;overflow-x:auto;padding:8px;border-right:0;border-bottom:1px solid var(--line);gap:2px}
+    nav .grp,nav .brand,nav .foot,nav .sp{display:none} nav button.nv{width:auto;white-space:nowrap}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+  <symbol id="i-clean" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3 5 13h6l-1 8 8-10h-6z"/></symbol>
+  <symbol id="i-rocket" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></symbol>
+  <symbol id="i-disk" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18"/><circle cx="17" cy="17" r=".6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14 6a4 4 0 0 0 5 5l-9 9a2.5 2.5 0 0 1-4-4l9-9z"/><path d="M14 6l3-3 4 4-3 3"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 8h16l-1-4H5z"/><path d="M5 8v12h14V8"/><path d="M9 20v-6h6v6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v5M12 17.5v.01"/></symbol>
+</defs></svg>
+
 <div class="app">
-  <nav>
-    <div class="brand"><i></i> Optimizador PC</div>
-    <button data-p="diag" class="on">📊 Diagnóstico</button>
-    <button data-p="clean">🧹 Limpieza</button>
-    <button data-p="opt">⚡ Optimizar</button>
-    <button data-p="start">🚀 Programas de inicio</button>
-    <button data-p="prog">🗑️ Desinstalar</button>
-    <button data-p="adm">🛡️ Administrador</button>
-    <div class="spacer"></div>
-    <div id="adminBadge" class="badge">…</div>
+  <nav aria-label="Secciones">
+    <div class="brand"><div class="logo"><svg class="i"><use href="#i-bolt"/></svg></div><div><b>Optimizador PC</b><span>Mantenimiento de Windows</span></div></div>
+    <div id="menu"></div>
+    <div class="sp"></div>
+    <div class="foot"><span id="adm" class="chip">…</span>
+      <button class="iconbtn" id="theme" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema"><svg class="i"><use href="#i-sun"/></svg></button></div>
   </nav>
-  <main id="main"></main>
+  <main id="main" tabindex="-1"></main>
 </div>
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="modal" class="modal-bg" role="dialog" aria-modal="true" aria-labelledby="mt"><div class="modal"><h2 id="mt"></h2><p id="mp"></p><div class="row"><button class="btn sec" id="mno">Cancelar</button><button class="btn" id="myes">Aceptar</button></div></div></div>
 
 <script>
 const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const arr = v => Array.isArray(v) ? v : (v == null ? [] : [v]);
-const fmt = b => { b = +b || 0; const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1024&&i<4){b/=1024;i++} return b.toFixed(i?2:0)+' '+u[i]; };
+const ico = n => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const fmt = b => { b = +b || 0; const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1024&&i<4){b/=1024;i++} return b.toLocaleString('es',{maximumFractionDigits:i>=3?2:i?1:0})+' '+u[i]; };
+const pct = (a,b) => b ? Math.min(100, Math.max(0, a/b*100)) : 0;
+const fdate = s => s ? new Date(s*1000).toLocaleDateString('es',{year:'numeric',month:'short',day:'numeric'}) : '—';
+const midtrunc = (p, n=64) => p.length <= n ? p : p.slice(0, 22) + '…' + p.slice(-(n-23));
 
 async function api(path, body) {
   const opt = body === undefined ? {} : { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) };
@@ -93,183 +230,458 @@ async function api(path, body) {
   return j;
 }
 let toastT;
-function toast(msg) { const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),5000); }
+function toast(msg) { const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),5200); }
 
-// ---- latido: si se cierra la ventana, el programa termina solo
+// Confirmación propia (más clara que confirm() y consistente con el tema)
+function ask(title, text, ok='Aceptar', danger=false) {
+  return new Promise(res => {
+    $('#mt').textContent = title; $('#mp').textContent = text;
+    const y = $('#myes'), n = $('#mno'), bg = $('#modal');
+    y.textContent = ok; y.className = 'btn' + (danger ? ' danger' : '');
+    bg.classList.add('show'); y.focus();
+    const done = v => { bg.classList.remove('show'); y.onclick = n.onclick = null; document.onkeydown = null; res(v); };
+    y.onclick = () => done(true); n.onclick = () => done(false);
+    document.onkeydown = e => { if (e.key === 'Escape') done(false); };
+  });
+}
+
+// ---- latido: si se cierra la ventana el programa termina solo
 async function ping() {
-  try { const r = await api('ping'); const b=$('#adminBadge');
-    b.textContent = r.admin ? '✔ Administrador' : '⚠ Sin permisos de admin'; b.className = 'badge ' + (r.admin ? 'ok' : 'bad'); } catch {}
+  try { const r = await api('ping'); const b = $('#adm');
+    b.className = 'chip ' + (r.admin ? 'ok' : 'off'); b.innerHTML = '<i></i>' + (r.admin ? 'Administrador' : 'Sin permisos de admin'); } catch {}
 }
 setInterval(ping, 5000); ping();
+addEventListener('pagehide', () => { try { navigator.sendBeacon('api/bye', '{}'); } catch {} });
 
-// ---- tareas largas con registro en vivo
-async function runJob(kind, items, logEl, btn) {
-  btn.disabled = true; logEl.classList.add('show'); logEl.innerHTML = '';
-  const { job } = await api(kind, { items });
-  let from = 0, done = false;
-  while (!done) {
-    const s = await api('job?id=' + job + '&from=' + from);
-    for (const l of s.lines) {
-      const d = document.createElement('div');
-      if (l.includes('[OK]')) d.className='l-ok'; else if (l.includes('[!!]')||l.includes('[XX]')) d.className='l-warn';
-      d.textContent = l; logEl.appendChild(d);
-    }
-    from = s.next; done = s.done; logEl.scrollTop = logEl.scrollHeight;
-    if (!done) await new Promise(r => setTimeout(r, 600));
-  }
-  btn.disabled = false;
-}
-
-const pages = {};
-function go(p) {
-  document.querySelectorAll('nav button[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === p));
-  $('#main').innerHTML = '<p class="sub">Cargando…</p>';
-  pages[p]().catch(e => { $('#main').innerHTML = '<div class="card">No se pudo cargar: ' + esc(e.message) + '</div>'; });
-}
-document.querySelectorAll('nav button[data-p]').forEach(b => b.onclick = () => go(b.dataset.p));
-
-// ---------------- Diagnostico
-pages.diag = async () => {
-  const d = await api('diag'); const s = d.sistema || {};
-  const discos = arr(s.discos).map(x => {
-    const pct = x.total ? x.libre / x.total * 100 : 0;
-    return `<div><b>${esc(x.letra)}</b> <span class="note">${fmt(x.libre)} libres de ${fmt(x.total)} (${pct.toFixed(1)}%)</span>
-      <div class="bar ${pct<10?'low':''}"><div style="width:${100-pct}%"></div></div>${pct<10?'<span class="pill off">Poco espacio</span>':''}</div>`;
-  }).join('') || '<span class="note">Sin datos</span>';
-  const top = arr(s.top).map(x => `<tr><td>${esc(x.nombre)}</td><td class="num">${fmt(x.bytes)}</td></tr>`).join('');
-  const salud = arr(s.salud).map(x => `<tr><td>${esc(x.nombre)}</td><td><span class="pill ${x.estado==='Healthy'?'ok':'off'}">${esc(x.estado)}</span></td></tr>`).join('');
-  const basura = arr(d.basura).filter(x => !x.manual).map(x => `<tr><td>${esc(x.name)}</td><td class="num">${fmt(x.bytes)}</td></tr>`).join('');
-  $('#main').innerHTML = `
-    <h1>Diagnóstico del sistema</h1><p class="sub">Solo lectura: no modifica nada.</p>
-    ${d.error ? `<div class="card"><span class="pill off">Aviso</span> ${esc(d.error)}</div>` : ''}
-    <div class="grid">
-      <div class="card stat"><span>Equipo</span><b>${esc(s.equipo||'—')}</b></div>
-      <div class="card stat"><span>Windows</span><b style="font-size:15px">${esc(s.windows||'—')}</b></div>
-      <div class="card stat"><span>Memoria RAM</span><b>${fmt(s.ramLibre)} libres</b><span>de ${fmt(s.ramTotal)}</span></div>
-      <div class="card stat"><span>Encendido desde hace</span><b>${esc(s.horas ?? '—')} h</b><span>${(s.horas||0)>168?'Conviene reiniciar':''}</span></div>
-    </div>
-    <div class="card"><h3>Procesador</h3>${esc(s.cpu||'—')}</div>
-    <div class="card"><h3>Discos</h3>${discos}</div>
-    <div class="card"><h3>Espacio recuperable (estimado): ${fmt(d.basuraTotal)}</h3>
-      <table>${basura}</table>
-      <div class="row" style="margin-top:12px"><button class="btn" onclick="go('clean')">Ir a limpieza</button></div></div>
-    <div class="grid">
-      <div class="card"><h3>Top 10 procesos por memoria</h3><table>${top}</table></div>
-      <div class="card"><h3>Salud de discos físicos</h3><table>${salud || '<tr><td class="note">No disponible</td></tr>'}</table></div>
-    </div>`;
+// ---- tema
+const themeBtn = $('#theme');
+try { const t = localStorage.getItem('tema'); if (t) document.documentElement.dataset.theme = t; } catch {}
+themeBtn.onclick = () => {
+  const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const nx = cur === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = nx;
+  try { localStorage.setItem('tema', nx); } catch {}
 };
 
-// ---------------- Limpieza
+// ---- tareas largas con consola en vivo, progreso y cancelación
+async function runJob(kind, body, ui) {
+  const { log, prog, btn, stop } = ui;
+  btn.disabled = true; log.classList.add('show'); log.innerHTML = ''; prog.classList.add('show'); prog.querySelector('.pt').textContent = 'Trabajando…';
+  if (stop) stop.hidden = false;
+  const { job } = await api(kind, body);
+  if (stop) stop.onclick = () => api('cancel', { id: job });
+  let from = 0, snap;
+  for (;;) {
+    snap = await api('job?id=' + job + '&from=' + from);
+    for (const l of snap.lines) {
+      const d = document.createElement('div');
+      d.className = l.includes('[OK]') ? 'ok' : (l.includes('[!!]') || l.includes('[XX]')) ? 'wr' : (l.startsWith('>>') || l.startsWith('==')) ? 'hd' : '';
+      d.textContent = l; log.appendChild(d);
+    }
+    from = snap.next; log.scrollTop = log.scrollHeight;
+    if (snap.progress) prog.querySelector('.pt').textContent = snap.progress;
+    if (snap.done) break;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  prog.classList.remove('show'); btn.disabled = false; if (stop) stop.hidden = true;
+  return snap;
+}
+const consoleUI = () => `<div class="prog"><span class="spin"></span><span class="pt"></span><button class="btn sec sm" id="stop" hidden>Cancelar</button></div><div class="log" id="log" aria-live="polite"></div>`;
+const getUI = btn => ({ log: $('#log'), prog: $('.prog'), btn, stop: $('#stop') });
+const loading = t => `<div class="loading"><span class="spin"></span>${esc(t)}</div>`;
+
+// ---- navegación
+const NAV = [
+  ['Resumen', [['panel','Panel','panel']]],
+  ['Mantenimiento', [['clean','Limpieza','clean'],['opt','Optimizar','bolt'],['start','Programas de inicio','rocket'],['prog','Desinstalar','box'],['repair','Reparar Windows','wrench']]],
+  ['Herramientas', [['procs','Procesos','cpu'],['services','Servicios','gear'],['big','Archivos grandes','disk'],['dupes','Archivos repetidos','copy'],['net','Red','net'],['settings','Ajustes de Windows','sliders']]],
+  ['Sistema', [['info','Información','info'],['adm','Administrador','shield']]],
+];
+$('#menu').innerHTML = NAV.map(([g, items]) => `<div class="grp">${g}</div>` +
+  items.map(([id, label, ic]) => `<button class="nv" data-p="${id}">${ico(ic)}<span>${label}</span></button>`).join('')).join('');
+$$('.nv').forEach(b => b.onclick = () => go(b.dataset.p));
+
+const pages = {}; let cleanup = null, pageSeq = 0;
+function head(title, sub, act='') { return `<header class="ph"><div><h1>${title}</h1>${sub ? `<p>${sub}</p>` : ''}</div><div class="act">${act}</div></header>`; }
+async function go(p) {
+  const seq = ++pageSeq;
+  if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
+  $$('.nv').forEach(b => b.toggleAttribute('aria-current', false) || (b.dataset.p === p && b.setAttribute('aria-current', 'page')));
+  $('#main').innerHTML = loading('Cargando…'); $('#main').scrollTop = 0;
+  try {
+    const c = await pages[p]();
+    if (seq !== pageSeq) { if (c) c(); return; }
+    cleanup = c || null;
+  } catch (e) {
+    if (seq === pageSeq) $('#main').innerHTML = head('No se pudo cargar') + `<div class="card"><span class="pill b">Error</span> ${esc(e.message)}</div>`;
+  }
+}
+function checkedIn(sel) { return $$(sel + ' input:checked').map(i => i.value); }
+
+// ================= PANEL =================
+const hist = { cpu: [], ram: [] };
+function ringSVG(v, color) {
+  const r = 44, c = 2 * Math.PI * r;
+  return `<svg viewBox="0 0 104 104"><circle class="bg" cx="52" cy="52" r="${r}"/><circle class="fg" cx="52" cy="52" r="${r}" stroke="${color}" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - Math.min(100, v) / 100)}"/></svg>`;
+}
+const lvl = v => v >= 85 ? 'var(--bad)' : v >= 65 ? 'var(--warn)' : 'var(--ok)';
+function spark(data) {
+  if (data.length < 2) return '<svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none"></svg>';
+  const pts = data.map((v, i) => [i / (60 - 1) * 100 + (100 - (data.length - 1) / 59 * 100), 40 - Math.min(100, v) / 100 * 38 - 1]);
+  const line = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  return `<svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M${pts[0][0]},40 L${line.replace(/ /g, ' L')} L${pts[pts.length - 1][0]},40Z"/><polyline points="${line}"/></svg>`;
+}
+pages.panel = async () => {
+  $('#main').innerHTML = head('Panel', 'Estado de tu equipo en tiempo real.', `<button class="btn sec" id="rf">Actualizar</button>`) +
+    `<div class="grid g3">
+       <div class="card"><h3>Salud del equipo</h3><div class="meter"><div class="ring" id="scoreRing"></div><div><div id="scoreTxt" class="big">—</div><div id="scoreLbl" class="mut small">Calculando…</div></div></div></div>
+       <div class="card"><h3>Procesador</h3><div class="row" style="justify-content:space-between"><span class="big" id="cpuV">—</span><span class="mut small" id="cpuN"></span></div><div id="cpuS"></div></div>
+       <div class="card"><h3>Memoria RAM</h3><div class="row" style="justify-content:space-between"><span class="big" id="ramV">—</span><span class="mut small" id="ramN"></span></div><div id="ramS"></div></div>
+     </div>
+     <div class="grid g2"><div class="card"><h3>Qué conviene hacer</h3><div id="recs">${loading('Analizando…')}</div></div>
+       <div class="card"><h3>Discos</h3><div id="disks"></div></div></div>`;
+  const state = { junk: null, startup: null, hours: 0, ramUse: 0, disks: [] };
+  const drawRecs = () => {
+    const r = []; let score = 100;
+    const lowDisk = state.disks.filter(d => pct(d.libre, d.total) < 12);
+    lowDisk.forEach(d => { score -= pct(d.libre, d.total) < 6 ? 22 : 12; r.push(['b', `Poco espacio en ${d.letra}`, `Quedan ${fmt(d.libre)} libres (${pct(d.libre, d.total).toFixed(0)} %). Busca archivos grandes o limpia temporales.`, 'Ver archivos grandes', 'big']); });
+    if (state.junk != null) {
+      if (state.junk > 2 * 2**30) { score -= 10; r.push(['w', `Hay ${fmt(state.junk)} de archivos temporales`, 'Se pueden borrar sin riesgo.', 'Limpiar', 'clean']); }
+      else if (state.junk > 400 * 2**20) { score -= 4; r.push(['w', `Hay ${fmt(state.junk)} recuperables`, 'Limpieza rápida disponible.', 'Limpiar', 'clean']); }
+    }
+    if (state.ramUse > 85) { score -= 10; r.push(['w', 'Memoria casi llena', `Usas el ${state.ramUse.toFixed(0)} % de la RAM. Revisa qué procesos la consumen.`, 'Ver procesos', 'procs']); }
+    if (state.hours > 168) { score -= 8; r.push(['w', `Llevas ${Math.floor(state.hours / 24)} días sin reiniciar`, 'Reiniciar aplica actualizaciones y libera memoria.', null, null]); }
+    if (state.startup != null && state.startup > 10) { score -= 8; r.push(['w', `${state.startup} programas arrancan con Windows`, 'Desactivar los que no uses acelera el inicio.', 'Revisar inicio', 'start']); }
+    if (!r.length) r.push(['', 'Todo en orden', 'No hay nada urgente. Puedes ejecutar una limpieza de mantenimiento cuando quieras.', 'Ir a limpieza', 'clean']);
+    score = Math.max(0, score);
+    const col = score >= 85 ? 'var(--ok)' : score >= 65 ? 'var(--warn)' : 'var(--bad)';
+    $('#scoreRing').innerHTML = ringSVG(score, col) + `<div class="v">${score}<small>de 100</small></div>`;
+    $('#scoreTxt').textContent = score >= 85 ? 'Excelente' : score >= 65 ? 'Buena' : score >= 45 ? 'Mejorable' : 'Atención';
+    $('#scoreLbl').textContent = r.length === 1 && !r[0][0] ? 'Sin problemas detectados' : `${r.length} punto(s) a revisar`;
+    $('#recs').innerHTML = r.map(x => `<div class="rec"><span class="dot ${x[0]}"></span><div class="t">${esc(x[1])}<small>${esc(x[2])}</small></div>${x[3] ? `<button class="btn sec sm" data-go="${x[4]}">${x[3]}</button>` : ''}</div>`).join('');
+    $$('#recs [data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+  };
+  let alive = true;
+  const tick = async () => {
+    try {
+      const d = await api('live'); if (!alive) return;
+      const used = d.ramTotal - d.ramLibre, ru = pct(used, d.ramTotal);
+      hist.cpu.push(d.cpu); hist.ram.push(ru); hist.cpu = hist.cpu.slice(-60); hist.ram = hist.ram.slice(-60);
+      $('#cpuV').textContent = d.cpu.toFixed(0) + ' %'; $('#cpuN').textContent = d.procesos + ' procesos'; $('#cpuS').innerHTML = spark(hist.cpu);
+      $('#ramV').textContent = ru.toFixed(0) + ' %'; $('#ramN').textContent = fmt(used) + ' de ' + fmt(d.ramTotal); $('#ramS').innerHTML = spark(hist.ram);
+      state.hours = d.horas; state.ramUse = ru; state.disks = d.discos;
+      $('#disks').innerHTML = arr(d.discos).map(x => { const u = 100 - pct(x.libre, x.total);
+        return `<div style="margin-bottom:14px"><div class="row" style="justify-content:space-between"><b>${esc(x.letra)} <span class="mut" style="font-weight:400">${esc(x.etiqueta)}</span></b><span class="mono small mut">${fmt(x.libre)} libres de ${fmt(x.total)}</span></div><div class="bar ${u > 94 ? 'low' : u > 88 ? 'mid' : ''}" style="margin-top:6px"><i style="width:${u}%"></i></div></div>`; }).join('');
+      drawRecs();
+    } catch {}
+  };
+  const timer = setInterval(tick, 2000); tick();
+  $('#rf').onclick = () => go('panel');
+  api('scan').then(l => { state.junk = arr(l).filter(x => !x.manual).reduce((a, x) => a + x.bytes, 0); drawRecs(); }).catch(() => {});
+  api('startup').then(l => { state.startup = arr(l).filter(x => x.enabled).length; drawRecs(); }).catch(() => {});
+  return () => { alive = false; clearInterval(timer); };
+};
+
+// ================= LIMPIEZA =================
 pages.clean = async () => {
-  const items = await api('scan');
-  $('#main').innerHTML = `
-    <h1>Limpieza</h1><p class="sub">Solo borra temporales y caché. Nunca toca tus documentos, contraseñas ni historial.</p>
-    <div class="card" id="list">${items.map(i => `
-      <label class="chk"><input type="checkbox" value="${i.id}" ${i.default?'checked':''}>
-        <div class="t">${esc(i.name)}<small>${esc(i.desc)}</small></div>
-        <div class="sz">${i.manual ? '' : fmt(i.bytes)}</div></label>`).join('')}</div>
-    <div class="row"><button class="btn" id="go">Limpiar ahora</button>
-      <button class="btn sec" id="rescan">Volver a medir</button>
-      <span class="note">Cierra los navegadores para limpiar su caché por completo. Los archivos en uso se omiten.</span></div>
-    <div class="log" id="log"></div>`;
+  const items = await api('scan'); const total = items.filter(i => !i.manual).reduce((a, i) => a + i.bytes, 0);
+  let html = '', g = '';
+  items.forEach(i => { if (i.group !== g) { g = i.group; html += `<div class="optgrp">${g}</div>`; }
+    html += `<label class="opt"><input type="checkbox" value="${i.id}" ${i.default ? 'checked' : ''}><div class="t">${esc(i.name)}<small>${esc(i.desc)}</small></div><div class="sz">${i.manual ? '' : fmt(i.bytes)}</div></label>`; });
+  $('#main').innerHTML = head('Limpieza', 'Solo borra temporales y caché. Nunca toca tus documentos, contraseñas ni historial.',
+    `<span class="chip"><i></i>Recuperable: <b class="mono">${fmt(total)}</b></span>`) +
+    `<div class="card" id="list">${html}</div><div class="row"><button class="btn" id="go">Limpiar ahora</button><button class="btn sec" id="rescan">Volver a medir</button>
+     <span class="mut small">Cierra los navegadores para limpiar su caché por completo. Los archivos en uso se omiten.</span></div>${consoleUI()}`;
   $('#rescan').onclick = () => go('clean');
   $('#go').onclick = async () => {
-    const sel = [...document.querySelectorAll('#list input:checked')].map(i => i.value);
-    if (!sel.length) return toast('Marca al menos una opción.');
-    if (!confirm('Se limpiarán ' + sel.length + ' elemento(s). ¿Continuar?')) return;
-    await runJob('clean', sel, $('#log'), $('#go'));
+    const sel = checkedIn('#list'); if (!sel.length) return toast('Marca al menos una opción.');
+    if (!await ask('¿Limpiar ahora?', `Se limpiarán ${sel.length} elemento(s). Los archivos personales no se tocan.`, 'Limpiar')) return;
+    await runJob('clean', { items: sel }, getUI($('#go')));
   };
 };
 
-// ---------------- Optimizar
+// ================= OPTIMIZAR =================
 pages.opt = async () => {
   const opts = [
-    ['restore','Crear punto de restauración antes de empezar','Recomendado: permite volver atrás (Windows permite uno cada 24 h)',true],
-    ['power','Plan de energía de alto rendimiento','Reversible desde Configuración › Energía',true],
-    ['trim','Optimizar discos (TRIM en SSD / desfragmentar HDD)','Solo unidades fijas NTFS',true],
-    ['storage','Activar Sensor de almacenamiento','Limpieza automática de Windows',true],
+    ['restore','Crear punto de restauración antes de empezar','Recomendado: permite volver atrás (Windows permite uno cada 24 h).',true],
+    ['power','Plan de energía de alto rendimiento','Reversible desde Configuración › Sistema › Energía.',true],
+    ['trim','Optimizar discos (TRIM en SSD / desfragmentar HDD)','Ejecuta defrag /O en las unidades NTFS.',true],
+    ['storage','Activar Sensor de almacenamiento','Limpieza automática de Windows.',true],
     ['dns','Vaciar caché DNS','',true],
-    ['dismcheck','Comprobar integridad del sistema (DISM CheckHealth)','Solo comprueba, no repara',false],
-  ];
-  $('#main').innerHTML = `
-    <h1>Optimizar rendimiento</h1><p class="sub">Ajustes seguros y reversibles. No desactiva servicios ni telemetría.</p>
-    <div class="card" id="list">${opts.map(o => `
-      <label class="chk"><input type="checkbox" value="${o[0]}" ${o[3]?'checked':''}>
-        <div class="t">${o[1]}<small>${o[2]}</small></div></label>`).join('')}</div>
-    <div class="row"><button class="btn" id="go">Optimizar ahora</button>
-      <button class="btn sec" onclick="go('start')">Gestionar programas de inicio</button></div>
-    <div class="log" id="log"></div>`;
+    ['dismcheck','Comprobar integridad del sistema (DISM CheckHealth)','Solo comprueba, no repara.',false],
+    ['hibernate','Desactivar hibernación','Libera el archivo hiberfil.sys (varios GB). Desactiva también el Inicio rápido.',false]];
+  $('#main').innerHTML = head('Optimizar rendimiento', 'Ajustes seguros y reversibles. No desactiva servicios ni telemetría.') +
+    `<div class="card" id="list">${opts.map(o => `<label class="opt"><input type="checkbox" value="${o[0]}" ${o[3] ? 'checked' : ''}><div class="t">${o[1]}<small>${o[2]}</small></div></label>`).join('')}</div>
+     <div class="row"><button class="btn" id="go">Optimizar ahora</button><button class="btn sec" onclick="go('start')">Programas de inicio</button><button class="btn sec" onclick="go('settings')">Ajustes de Windows</button></div>${consoleUI()}`;
   $('#go').onclick = async () => {
-    const sel = [...document.querySelectorAll('#list input:checked')].map(i => i.value);
-    if (!sel.length) return toast('Marca al menos una opción.');
-    await runJob('optimize', sel, $('#log'), $('#go'));
+    const sel = checkedIn('#list'); if (!sel.length) return toast('Marca al menos una opción.');
+    await runJob('optimize', { items: sel }, getUI($('#go')));
   };
 };
 
-// ---------------- Inicio
+// ================= REPARAR =================
+pages.repair = async () => {
+  const opts = [
+    ['dism_scan','DISM · Buscar daños en la imagen de Windows','Comprobación a fondo, sin cambiar nada. ~5–10 min.',true],
+    ['sfc','SFC · Verificar y reparar archivos del sistema','Repara archivos protegidos dañados. ~10–20 min.',true],
+    ['dism_restore','DISM · Reparar la imagen de Windows','Descarga componentes sanos desde Windows Update. Necesita Internet.',false],
+    ['chkdsk','CHKDSK · Comprobar el disco del sistema','Análisis en línea, sin reiniciar. ~5 min.',false]];
+  $('#main').innerHTML = head('Reparar Windows', 'Herramientas oficiales de Microsoft para corregir archivos dañados y errores de disco.') +
+    `<div class="banner">${ico('warn')}<div>Estas tareas pueden tardar bastante. Puedes cancelarlas, pero conviene dejar que terminen y no apagar el equipo mientras se ejecutan.</div></div>
+     <div class="card" id="list">${opts.map(o => `<label class="opt"><input type="checkbox" value="${o[0]}" ${o[3] ? 'checked' : ''}><div class="t">${o[1]}<small>${o[2]}</small></div></label>`).join('')}</div>
+     <div class="row"><button class="btn" id="go">Iniciar</button></div>${consoleUI()}`;
+  $('#go').onclick = async () => {
+    const sel = checkedIn('#list'); if (!sel.length) return toast('Marca al menos una opción.');
+    if (!await ask('¿Iniciar reparación?', 'Se ejecutarán las herramientas seleccionadas en este orden: DISM, SFC, CHKDSK.', 'Iniciar')) return;
+    await runJob('repair', { items: sel }, getUI($('#go')));
+  };
+};
+
+// ================= INICIO =================
+const SCOPE = { HKLM:'Registro (todos los usuarios)', HKLM32:'Registro 32 bits (todos)', HKCU:'Registro (tu usuario)', CARPETA_USUARIO:'Carpeta Inicio (tu usuario)', CARPETA_COMUN:'Carpeta Inicio (todos)' };
 pages.start = async () => {
-  const l = await api('startup');
-  if (l.error) throw new Error(l.error);
-  $('#main').innerHTML = `
-    <h1>Programas de inicio</h1>
-    <p class="sub">Desactiva lo que no necesites que arranque con Windows. Es reversible: puedes volver a activarlo aquí o en Administrador de tareas › Inicio.</p>
-    <div class="card"><table><tr><th>Programa</th><th>Comando</th><th>Origen</th><th>Activo</th></tr>
-    ${arr(l).map((x,i) => `<tr><td>${esc(x.name)}</td><td class="cmd" title="${esc(x.cmd)}">${esc(x.cmd)}</td>
-      <td><span class="pill">${esc(x.scope)}</span></td>
-      <td><label class="sw"><input type="checkbox" data-i="${i}" ${x.enabled?'checked':''}><span></span></label></td></tr>`).join('')
-      || '<tr><td colspan="4" class="empty">No hay programas de inicio en el registro.</td></tr>'}</table></div>
-    <p class="note">Solo se listan los programas del registro (Run). Los de la carpeta Inicio se gestionan desde el Administrador de tareas.</p>`;
-  document.querySelectorAll('.sw input').forEach(cb => cb.onchange = async () => {
+  const l = arr(await api('startup'));
+  $('#main').innerHTML = head('Programas de inicio', 'Desactiva lo que no necesites que arranque con Windows. Es reversible: puedes volver a activarlo aquí o en el Administrador de tareas.',
+    `<span class="chip"><i></i>${l.filter(x => x.enabled).length} activos de ${l.length}</span>`) +
+    `<div class="card tw"><table><thead><tr><th>Programa</th><th>Comando</th><th>Origen</th><th class="r">Activo</th></tr></thead><tbody>
+    ${l.map((x, i) => `<tr><td><b>${esc(x.name)}</b></td><td class="cmd trunc" title="${esc(x.cmd)}">${esc(x.cmd)}</td><td><span class="pill">${esc(SCOPE[x.scope] || x.scope)}</span></td>
+      <td class="r"><label class="sw"><input type="checkbox" data-i="${i}" ${x.enabled ? 'checked' : ''} aria-label="Activar ${esc(x.name)}"><span></span></label></td></tr>`).join('')
+      || '<tr><td colspan="4" class="empty">No hay programas de inicio configurados.</td></tr>'}</tbody></table></div>`;
+  $$('.sw input').forEach(cb => cb.onchange = async () => {
     const x = l[cb.dataset.i];
-    try { await api('startup', { scope:x.scope, name:x.name, enabled:cb.checked });
-      toast((cb.checked?'Activado: ':'Desactivado: ') + x.name); }
-    catch(e) { cb.checked = !cb.checked; toast('Error: ' + e.message); }
+    try { await api('startup', { scope: x.scope, name: x.name, enabled: cb.checked }); toast((cb.checked ? 'Activado: ' : 'Desactivado: ') + x.name); }
+    catch (e) { cb.checked = !cb.checked; toast('Error: ' + e.message); }
   });
 };
 
-// ---------------- Programas
+// ================= DESINSTALAR =================
 pages.prog = async () => {
-  const l = await api('programs');
-  if (l.error) throw new Error(l.error);
-  $('#main').innerHTML = `
-    <h1>Desinstalar programas</h1><p class="sub">Se abre el desinstalador del propio programa. Nada se quita sin tu confirmación.</p>
-    <div class="row" style="margin-bottom:12px"><input type="search" id="q" placeholder="Buscar programa…"><span class="note" id="cnt"></span></div>
-    <div class="card"><table><thead><tr><th>Programa</th><th>Versión</th><th>Editor</th><th class="num">Tamaño</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>`;
+  $('#main').innerHTML = head('Desinstalar', 'Se abre el desinstalador del propio programa. Nada se quita sin tu confirmación.') +
+    `<div class="tabs" role="tablist"><button class="tab" role="tab" aria-selected="true" data-t="win">Programas</button><button class="tab" role="tab" aria-selected="false" data-t="store">Apps de la Tienda</button></div><div id="tabc"></div>`;
+  const show = async t => {
+    $$('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.t === t));
+    $('#tabc').innerHTML = loading(t === 'win' ? 'Leyendo programas…' : 'Consultando apps de la Tienda (puede tardar unos segundos)…');
+    try { await (t === 'win' ? tabWin() : tabStore()); } catch (e) { $('#tabc').innerHTML = `<div class="card"><span class="pill b">Error</span> ${esc(e.message)}</div>`; }
+  };
+  $$('.tab').forEach(b => b.onclick = () => show(b.dataset.t)); show('win');
+};
+async function tabWin() {
+  const l = arr(await api('programs'));
+  $('#tabc').innerHTML = `<div class="row" style="margin-bottom:12px"><input type="search" id="q" placeholder="Buscar programa…" aria-label="Buscar"><span class="mut small" id="cnt"></span></div>
+    <div class="card tw"><table><thead><tr><th>Programa</th><th>Versión</th><th>Editor</th><th class="r">Tamaño</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>`;
   const draw = () => {
-    const q = $('#q').value.toLowerCase();
-    const f = arr(l).filter(x => x.nombre.toLowerCase().includes(q) || (x.editor||'').toLowerCase().includes(q));
-    $('#cnt').textContent = f.length + ' de ' + arr(l).length + ' programas';
-    $('#tb').innerHTML = f.map(x => `<tr><td>${esc(x.nombre)}</td><td>${esc(x.version)}</td><td>${esc(x.editor)}</td>
-      <td class="num">${x.mb ? x.mb.toLocaleString('es') + ' MB' : '—'}</td>
-      <td class="num"><button class="btn sm danger" data-id="${esc(x.id)}" data-n="${esc(x.nombre)}">Desinstalar</button></td></tr>`).join('')
-      || '<tr><td colspan="5" class="empty">Sin resultados</td></tr>';
-    document.querySelectorAll('#tb button').forEach(b => b.onclick = async () => {
-      if (!confirm('¿Desinstalar "' + b.dataset.n + '"?')) return;
-      try { const r = await api('uninstall', { id:b.dataset.id }); toast(r.msg); } catch(e) { toast('Error: ' + e.message); }
+    const q = $('#q').value.toLowerCase(); const f = l.filter(x => x.nombre.toLowerCase().includes(q) || (x.editor || '').toLowerCase().includes(q));
+    $('#cnt').textContent = f.length + ' de ' + l.length;
+    $('#tb').innerHTML = f.map(x => `<tr><td><b>${esc(x.nombre)}</b></td><td class="mono small">${esc(x.version)}</td><td class="mut">${esc(x.editor)}</td><td class="r mono small">${x.mb ? fmt(x.mb * 1048576) : '—'}</td>
+      <td class="r"><button class="btn danger sm" data-id="${esc(x.id)}" data-n="${esc(x.nombre)}">Desinstalar</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">Sin resultados</td></tr>';
+    $$('#tb button').forEach(b => b.onclick = async () => {
+      if (!await ask('Desinstalar', `¿Desinstalar «${b.dataset.n}»?`, 'Desinstalar', true)) return;
+      try { toast((await api('uninstall', { id: b.dataset.id })).msg); } catch (e) { toast('Error: ' + e.message); }
     });
   };
   $('#q').oninput = draw; draw();
+}
+async function tabStore() {
+  const l = arr(await api('appx'));
+  $('#tabc').innerHTML = `<div class="banner">${ico('warn')}<div>Aquí solo aparecen aplicaciones que Windows permite quitar. Las apps críticas del sistema, la Tienda y los componentes necesarios están protegidos y no se muestran.</div></div>
+    <div class="card tw"><table><thead><tr><th>Aplicación</th><th>Editor</th><th>Versión</th><th></th></tr></thead><tbody>
+    ${l.map(x => `<tr><td><b>${esc(x.nombre)}</b></td><td class="mut">${esc(x.editor)}</td><td class="mono small">${esc(x.version)}</td>
+      <td class="r"><button class="btn danger sm" data-id="${esc(x.id)}" data-n="${esc(x.nombre)}">Quitar</button></td></tr>`).join('') || '<tr><td colspan="4" class="empty">No hay apps removibles.</td></tr>'}</tbody></table></div>`;
+  $$('#tabc button[data-id]').forEach(b => b.onclick = async () => {
+    if (!await ask('Quitar aplicación', `¿Quitar «${b.dataset.n}» para tu usuario? Podrás reinstalarla desde la Tienda.`, 'Quitar', true)) return;
+    b.disabled = true;
+    try { await api('appxremove', { id: b.dataset.id }); b.closest('tr').remove(); toast('Aplicación quitada'); } catch (e) { b.disabled = false; toast('Error: ' + e.message); }
+  });
+}
+
+// ================= PROCESOS =================
+pages.procs = async () => {
+  $('#main').innerHTML = head('Procesos', 'Qué programas consumen memoria y procesador ahora mismo.', `<button class="btn sec" id="rf">Actualizar</button>`) +
+    `<div class="row" style="margin-bottom:12px"><input type="search" id="q" placeholder="Buscar proceso…" aria-label="Buscar"><label class="row small mut" style="gap:6px"><input type="checkbox" id="auto"> Actualizar cada 5 s</label><span class="mut small" id="cnt"></span></div>
+     <div class="card tw"><table><thead><tr><th>Proceso</th><th class="r s" data-k="pid">PID</th><th class="r s" data-k="cpu">CPU</th><th class="r s" data-k="mem">Memoria ▾</th><th class="r">Hilos</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>`;
+  let data = [], key = 'mem', alive = true, busy = false, timer = null;
+  const draw = () => {
+    const q = $('#q').value.toLowerCase();
+    const f = data.filter(p => p.nombre.toLowerCase().includes(q)).sort((a, b) => b[key] - a[key]);
+    $('#cnt').textContent = f.length + ' procesos';
+    $('#tb').innerHTML = f.slice(0, 300).map(p => `<tr><td><b>${esc(p.nombre)}</b></td><td class="r mono small mut">${p.pid}</td><td class="r mono">${p.cpu.toFixed(1)} %</td><td class="r mono">${fmt(p.mem)}</td><td class="r mono small mut">${p.hilos}</td>
+      <td class="r"><button class="btn danger sm" data-pid="${p.pid}" data-n="${esc(p.nombre)}">Cerrar</button></td></tr>`).join('');
+    $$('#tb button').forEach(b => b.onclick = async () => {
+      if (!await ask('Cerrar proceso', `¿Cerrar «${b.dataset.n}» (PID ${b.dataset.pid})?\nSe perderán los datos sin guardar de ese programa.`, 'Cerrar', true)) return;
+      try { await api('killproc', { pid: +b.dataset.pid, name: b.dataset.n }); toast('Proceso cerrado'); load(); } catch (e) { toast(e.message); }
+    });
+  };
+  const load = async () => { if (busy) return; busy = true; try { data = arr(await api('procs')); if (alive) draw(); } finally { busy = false; } };
+  $$('th.s').forEach(th => th.onclick = () => { key = th.dataset.k; $$('th.s').forEach(x => x.textContent = x.textContent.replace(' ▾', '')); th.textContent += ' ▾'; draw(); });
+  $('#q').oninput = draw; $('#rf').onclick = load;
+  $('#auto').onchange = e => { clearInterval(timer); if (e.target.checked) timer = setInterval(load, 5000); };
+  await load();
+  return () => { alive = false; clearInterval(timer); };
 };
 
-// ---------------- Administrador
+// ================= SERVICIOS =================
+pages.services = async () => {
+  const l = arr(await api('services')); let f = 'all';
+  $('#main').innerHTML = head('Servicios', 'Servicios de Windows y de programas. Los críticos están bloqueados para que no puedas dañar el sistema.') +
+    `<div class="banner">${ico('warn')}<div>Cambia solo servicios que conozcas. «Deshabilitado» impide que el servicio arranque; puedes volver a ponerlo en «Manual» o «Automático».</div></div>
+     <div class="row" style="margin-bottom:12px"><input type="search" id="q" placeholder="Buscar servicio…" aria-label="Buscar">
+       <div class="filters" id="fl">${[['all','Todos'],['run','En ejecución'],['stop','Detenidos'],['auto','Automáticos']].map(([k, t]) => `<button class="fchip" data-f="${k}" aria-pressed="${k === 'all'}">${t}</button>`).join('')}</div><span class="mut small" id="cnt"></span></div>
+     <div class="card tw"><table><thead><tr><th>Servicio</th><th>Estado</th><th>Inicio</th><th class="r">Acciones</th></tr></thead><tbody id="tb"></tbody></table></div>`;
+  const draw = () => {
+    const q = $('#q').value.toLowerCase();
+    const r = l.filter(s => (s.visible + s.nombre).toLowerCase().includes(q) && (f === 'all' || (f === 'run' && s.estado === 'En ejecución') || (f === 'stop' && s.estado === 'Detenido') || (f === 'auto' && s.inicio === 'Automático')));
+    $('#cnt').textContent = r.length + ' servicios';
+    $('#tb').innerHTML = r.slice(0, 400).map(s => { const run = s.estado === 'En ejecución';
+      return `<tr><td><b>${esc(s.visible)}</b><div class="mono small mut">${esc(s.nombre)}</div></td><td><span class="pill ${run ? 'ok' : ''}">${s.estado}</span></td>
+      <td><select data-n="${esc(s.nombre)}" ${s.critico ? 'disabled' : ''} aria-label="Tipo de inicio de ${esc(s.visible)}">${[['auto','Automático'],['manual','Manual'],['disabled','Deshabilitado']].map(([v, t]) => `<option value="${v}" ${t === s.inicio ? 'selected' : ''}>${t}</option>`).join('')}${s.inicio === 'Otro' ? '<option selected>Otro</option>' : ''}</select></td>
+      <td class="r">${s.critico ? '<span class="pill w">Protegido</span> ' : ''}<button class="btn sec sm" data-a="${run ? 'stop' : 'start'}" data-n="${esc(s.nombre)}" ${s.critico && run ? 'disabled' : ''}>${run ? 'Detener' : 'Iniciar'}</button></td></tr>`; }).join('');
+    $$('#tb select').forEach(sel => sel.onchange = async () => {
+      try { await api('service', { name: sel.dataset.n, action: sel.value }); toast('Tipo de inicio actualizado'); const s = l.find(x => x.nombre === sel.dataset.n); s.inicio = sel.selectedOptions[0].text; }
+      catch (e) { toast(e.message); go('services'); } });
+    $$('#tb button').forEach(b => b.onclick = async () => {
+      b.disabled = true; try { await api('service', { name: b.dataset.n, action: b.dataset.a }); toast('Hecho'); const s = l.find(x => x.nombre === b.dataset.n); s.estado = b.dataset.a === 'start' ? 'En ejecución' : 'Detenido'; draw(); }
+      catch (e) { toast(e.message); b.disabled = false; } });
+  };
+  $('#q').oninput = draw; $$('#fl button').forEach(b => b.onclick = () => { f = b.dataset.f; $$('#fl button').forEach(x => x.setAttribute('aria-pressed', x === b)); draw(); }); draw();
+};
+
+// ================= selector de carpeta (grandes / repetidos) =================
+async function folderPicker(minOpts, defMin) {
+  const fl = arr(await api('folders'));
+  return `<div class="card"><div class="row"><label class="small mut">Carpeta<br><select id="root">${fl.map(f => `<option value="${esc(f.path)}">${esc(f.name)}  ·  ${esc(f.path)}</option>`).join('')}</select></label>
+    <label class="small mut">Tamaño mínimo<br><select id="min">${minOpts.map(m => `<option value="${m}" ${m === defMin ? 'selected' : ''}>${m >= 1024 ? m / 1024 + ' GB' : m + ' MB'}</option>`).join('')}</select></label>
+    <label class="small mut" style="flex:1;min-width:220px">…o escribe una ruta<br><input type="text" id="custom" placeholder="D:\\Mis archivos" style="width:100%"></label>
+    <button class="btn" id="go" style="align-self:flex-end">Analizar</button></div></div>${consoleUI()}`;
+}
+const rootVal = () => ($('#custom').value.trim() || $('#root').value);
+
+// ================= ARCHIVOS GRANDES =================
+pages.big = async () => {
+  $('#main').innerHTML = head('Archivos grandes', 'Encuentra qué ocupa más espacio. Los archivos que elijas van a la Papelera, así que puedes recuperarlos.') +
+    await folderPicker([50, 100, 500, 1024], 100) + `<div id="res"></div>`;
+  $('#go').onclick = async () => {
+    $('#res').innerHTML = '';
+    const snap = await runJob('bigfiles', { root: rootVal(), minMB: +$('#min').value }, getUI($('#go')));
+    const files = arr(snap.result && snap.result.files);
+    if (!files.length) { $('#res').innerHTML = '<div class="card empty">No se encontraron archivos de ese tamaño.</div>'; return; }
+    const max = files[0].size;
+    $('#res').innerHTML = `<div class="card tw"><table><thead><tr><th></th><th>Archivo</th><th class="r">Tamaño</th><th>Modificado</th><th></th></tr></thead><tbody>
+      ${files.map((f, i) => `<tr><td><input type="checkbox" data-i="${i}" aria-label="Seleccionar"></td><td><div class="trunc mono small" title="${esc(f.path)}">${esc(midtrunc(f.path))}</div><div class="sizebar"><i style="width:${pct(f.size, max)}%"></i></div></td>
+      <td class="r mono">${fmt(f.size)}</td><td class="mut small">${fdate(f.mtime)}</td><td class="r"><button class="btn sec sm" data-r="${i}">Mostrar</button></td></tr>`).join('')}</tbody></table></div>
+      <div class="row"><button class="btn danger" id="del">Enviar seleccionados a la Papelera</button><span class="mut small" id="selinfo"></span></div>`;
+    const upd = () => { const s = $$('#res input:checked').map(c => files[c.dataset.i]); $('#selinfo').textContent = s.length ? `${s.length} archivo(s) · ${fmt(s.reduce((a, f) => a + f.size, 0))}` : ''; };
+    $$('#res input').forEach(c => c.onchange = upd);
+    $$('#res button[data-r]').forEach(b => b.onclick = () => api('reveal', { path: files[b.dataset.r].path }).catch(e => toast(e.message)));
+    $('#del').onclick = async () => {
+      const s = $$('#res input:checked').map(c => files[c.dataset.i]); if (!s.length) return toast('Selecciona archivos primero.');
+      if (!await ask('Enviar a la Papelera', `${s.length} archivo(s) · ${fmt(s.reduce((a, f) => a + f.size, 0))}\nPodrás restaurarlos desde la Papelera de reciclaje.`, 'Enviar a la Papelera', true)) return;
+      try { const r = await api('trash', { paths: s.map(f => f.path) }); toast(r.n + ' archivo(s) enviados a la Papelera'); $$('#res input:checked').forEach(c => c.closest('tr').remove()); upd(); } catch (e) { toast('Error: ' + e.message); }
+    };
+  };
+};
+
+// ================= ARCHIVOS REPETIDOS =================
+pages.dupes = async () => {
+  $('#main').innerHTML = head('Archivos repetidos', 'Busca copias idénticas (comparadas por contenido, no por nombre). Se conserva siempre al menos una copia de cada grupo.') +
+    await folderPicker([1, 5, 20, 100], 1) + `<div id="res"></div>`;
+  $('#go').onclick = async () => {
+    $('#res').innerHTML = '';
+    const snap = await runJob('dupes', { root: rootVal(), minMB: +$('#min').value }, getUI($('#go')));
+    const groups = arr(snap.result && snap.result.groups);
+    if (!groups.length) { $('#res').innerHTML = '<div class="card empty">No se encontraron archivos repetidos.</div>'; return; }
+    $('#res').innerHTML = `<div class="row" style="margin-bottom:12px"><span class="chip"><i></i>${groups.length} grupos · recuperable <b class="mono">${fmt(snap.result.wasted)}</b></span>
+      <button class="btn sec sm" id="auto">Marcar todas menos la más antigua</button><button class="btn sec sm" id="none">Quitar marcas</button></div>
+      ${groups.map((g, gi) => `<div class="dupgrp"><div class="h"><b class="mono">${fmt(g.size)}</b><span class="mut">${g.files.length} copias</span></div>
+        ${g.files.map((f, fi) => `<label><input type="checkbox" data-g="${gi}" data-f="${fi}"><span class="trunc mono small" title="${esc(f.path)}">${esc(midtrunc(f.path, 70))}</span><span class="mut small" style="margin-left:auto">${fdate(f.mtime)}</span></label>`).join('')}</div>`).join('')}
+      <div class="row"><button class="btn danger" id="del">Enviar marcados a la Papelera</button><span class="mut small" id="selinfo"></span></div>`;
+    const sel = () => $$('#res input:checked').map(c => ({ g: +c.dataset.g, f: +c.dataset.f }));
+    const upd = () => { const s = sel(); $('#selinfo').textContent = s.length ? `${s.length} archivo(s) · ${fmt(s.reduce((a, x) => a + groups[x.g].size, 0))}` : ''; };
+    $$('#res input').forEach(c => c.onchange = upd);
+    $('#auto').onclick = () => { $$('#res input').forEach(c => c.checked = +c.dataset.f > 0); upd(); };
+    $('#none').onclick = () => { $$('#res input').forEach(c => c.checked = false); upd(); };
+    $('#del').onclick = async () => {
+      const s = sel(); if (!s.length) return toast('Marca copias primero.');
+      const bad = groups.findIndex((g, gi) => g.files.every((_, fi) => s.some(x => x.g === gi && x.f === fi)));
+      if (bad >= 0) return toast('Hay un grupo con todas las copias marcadas. Deja al menos una sin marcar.');
+      if (!await ask('Enviar a la Papelera', `${s.length} copia(s) repetidas · ${fmt(s.reduce((a, x) => a + groups[x.g].size, 0))}\nPodrás restaurarlas desde la Papelera de reciclaje.`, 'Enviar a la Papelera', true)) return;
+      try { const r = await api('trash', { paths: s.map(x => groups[x.g].files[x.f].path) }); toast(r.n + ' copia(s) enviadas a la Papelera'); $$('#res input:checked').forEach(c => c.closest('label').remove()); upd(); } catch (e) { toast('Error: ' + e.message); }
+    };
+  };
+};
+
+// ================= RED =================
+pages.net = async () => {
+  const ad = arr(await api('net'));
+  $('#main').innerHTML = head('Red', 'Diagnostica la conexión y repara problemas de red.', `<button class="btn" id="test">Probar conexión</button>`) +
+    `<div class="grid g2"><div class="card"><h3>Pruebas</h3><div id="tests" class="mut">Pulsa «Probar conexión» para empezar.</div></div>
+     <div class="card"><h3>Adaptadores activos</h3>${ad.map(a => `<div style="margin-bottom:12px"><b>${esc(a.name)}</b><div class="mono small mut">${esc(a.mac)} · MTU ${a.mtu}</div><div class="mono small">${a.addrs.map(esc).join('<br>')}</div></div>`).join('') || '<div class="mut">No hay adaptadores activos.</div>'}</div></div>
+     <div class="card"><h3>Reparar red</h3><div id="list">
+       ${[['dns','Vaciar caché DNS','Soluciona páginas que no cargan por datos antiguos.',true],['renew','Renovar dirección IP','Libera y solicita una IP nueva.',false],['winsock','Restablecer Winsock','Requiere reiniciar el equipo.',false],['iprst','Restablecer pila TCP/IP','Requiere reiniciar el equipo.',false]]
+        .map(o => `<label class="opt"><input type="checkbox" value="${o[0]}" ${o[3] ? 'checked' : ''}><div class="t">${o[1]}<small>${o[2]}</small></div></label>`).join('')}</div>
+     <div class="row" style="margin-top:12px"><button class="btn" id="go">Reparar</button></div>${consoleUI()}</div>`;
+  $('#test').onclick = async () => {
+    $('#tests').innerHTML = loading('Probando…');
+    try { const r = arr(await api('nettest'));
+      $('#tests').innerHTML = r.map(t => `<div class="rec"><span class="dot ${t.ok ? '' : 'b'}"></span><div class="t">${esc(t.name)}<small>${esc(t.detail)}</small></div><span class="mono small mut">${t.ms} ms</span></div>`).join('');
+    } catch (e) { $('#tests').textContent = e.message; }
+  };
+  $('#go').onclick = async () => {
+    const sel = checkedIn('#list'); if (!sel.length) return toast('Marca al menos una opción.');
+    if (sel.includes('renew') && !await ask('Renovar IP', 'La conexión se interrumpirá unos segundos.', 'Continuar')) return;
+    await runJob('netfix', { items: sel }, getUI($('#go')));
+  };
+};
+
+// ================= AJUSTES =================
+pages.settings = async () => {
+  const l = arr(await api('settings'));
+  $('#main').innerHTML = head('Ajustes de Windows', 'Cambios de privacidad y rendimiento. Todos son reversibles con el mismo interruptor.', `<button class="btn sec" id="rx">Reiniciar el Explorador</button>`) +
+    `<div class="card">${l.map((s, i) => `<div class="setrow"><div class="t"><b>${esc(s.name)}</b>${s.admin ? ' <span class="pill">Requiere admin</span>' : ''}<small>${esc(s.desc)}${s.note ? ' · ' + esc(s.note) : ''}</small></div>
+      <label class="sw"><input type="checkbox" data-i="${i}" ${s.on ? 'checked' : ''} aria-label="${esc(s.name)}"><span></span></label></div>`).join('')}</div>`;
+  $$('.sw input').forEach(cb => cb.onchange = async () => {
+    const s = l[cb.dataset.i];
+    try { await api('settings', { id: s.id, on: cb.checked }); toast((cb.checked ? 'Activado: ' : 'Desactivado: ') + s.name); }
+    catch (e) { cb.checked = !cb.checked; toast('Error: ' + e.message); }
+  });
+  $('#rx').onclick = async () => {
+    if (!await ask('Reiniciar el Explorador', 'La barra de tareas y las carpetas abiertas se cerrarán un momento.', 'Reiniciar')) return;
+    try { await api('restartexplorer', {}); toast('Explorador reiniciado'); } catch (e) { toast(e.message); }
+  };
+};
+
+// ================= INFORMACIÓN =================
+pages.info = async () => {
+  const s = await api('info');
+  $('#main').innerHTML = head('Información del sistema', 'Datos del equipo leídos directamente de Windows.') +
+    `<div class="grid g2"><div class="card"><h3>Equipo</h3><dl class="kv">
+      <dt>Nombre</dt><dd>${esc(s.equipo)}</dd><dt>Usuario</dt><dd>${esc(s.usuario)}</dd><dt>Windows</dt><dd>${esc(s.windows)} <span class="mono small mut">(compilación ${esc(s.build)})</span></dd>
+      <dt>Fabricante</dt><dd>${esc(s.fabricante || '—')}</dd><dt>Modelo</dt><dd>${esc(s.modelo || '—')}</dd><dt>Placa base</dt><dd>${esc(s.placa || '—')}</dd><dt>BIOS</dt><dd>${esc(s.bios || '—')}</dd>
+      <dt>Encendido</dt><dd>${s.horas} h</dd></dl></div>
+     <div class="card"><h3>Hardware</h3><dl class="kv"><dt>Procesador</dt><dd>${esc(s.cpu)} <span class="mut">· ${esc(s.nucleos)} hilos</span></dd>
+      <dt>Gráficos</dt><dd>${arr(s.gpu).map(esc).join('<br>') || '—'}</dd><dt>Memoria RAM</dt><dd>${fmt(s.ramTotal)} <span class="mut">(${fmt(s.ramLibre)} libres)</span></dd></dl></div></div>
+     <div class="card"><h3>Discos</h3>${arr(s.discos).map(d => `<div style="margin-bottom:14px"><div class="row" style="justify-content:space-between"><b>${esc(d.letra)} <span class="mut" style="font-weight:400">${esc(d.etiqueta)} · ${esc(d.fs)}</span></b><span class="mono small mut">${fmt(d.libre)} libres de ${fmt(d.total)}</span></div><div class="bar" style="margin-top:6px"><i style="width:${100 - pct(d.libre, d.total)}%"></i></div></div>`).join('')}</div>
+     <div class="card"><h3>Salud de discos físicos</h3><div id="hl">${loading('Consultando…')}</div></div>`;
+  api('health').then(h => {
+    const l = Array.isArray(h) ? h : [];
+    $('#hl').innerHTML = h.error ? `<span class="mut">No disponible: ${esc(h.error)}</span>` :
+      l.map(d => `<div class="rec"><span class="dot ${d.estado === 'Healthy' ? '' : 'b'}"></span><div class="t">${esc(d.nombre)}<small>${esc(d.tipo)} · ${fmt(d.bytes)}</small></div><span class="pill ${d.estado === 'Healthy' ? 'ok' : 'b'}">${d.estado === 'Healthy' ? 'Saludable' : esc(d.estado)}</span></div>`).join('') || '<span class="mut">Sin datos.</span>';
+  }).catch(e => { $('#hl').textContent = e.message; });
+};
+
+// ================= ADMIN =================
 pages.adm = async () => {
-  const l = await api('users');
-  if (l.error) throw new Error(l.error);
-  $('#main').innerHTML = `
-    <h1>Permisos de administrador</h1>
-    <p class="sub">Convierte a un usuario local de ESTE equipo en administrador. Úsalo solo en equipos que administras tú.</p>
-    <div class="card"><table><tr><th>Usuario local</th><th>Rol</th><th></th></tr>
-    ${arr(l).map(u => `<tr><td>${esc(u.name)}</td>
-      <td><span class="pill ${u.admin?'ok':''}">${u.admin?'Administrador':'Estándar'}</span></td>
-      <td class="num">${u.admin?'':`<button class="btn sm" data-u="${esc(u.name)}">Hacer administrador</button>`}</td></tr>`).join('')}</table></div>
-    <p class="note">Ser administrador permite instalar programas y cambiar el sistema. Cierra sesión y vuelve a entrar para que surta efecto.</p>`;
-  document.querySelectorAll('button[data-u]').forEach(b => b.onclick = async () => {
-    if (!confirm('¿Hacer administrador a "' + b.dataset.u + '"?')) return;
-    try { const r = await api('makeadmin', { user:b.dataset.u }); toast(r.msg); go('adm'); } catch(e) { toast('Error: ' + e.message); }
+  const l = arr(await api('users'));
+  $('#main').innerHTML = head('Permisos de administrador', 'Convierte a un usuario local de ESTE equipo en administrador. Úsalo solo en equipos que administras tú.') +
+    `<div class="card tw"><table><thead><tr><th>Usuario local</th><th>Rol</th><th></th></tr></thead><tbody>
+    ${l.map(u => `<tr><td><b>${esc(u.name)}</b></td><td><span class="pill ${u.admin ? 'ok' : ''}">${u.admin ? 'Administrador' : 'Estándar'}</span></td>
+      <td class="r">${u.admin ? '' : `<button class="btn sm" data-u="${esc(u.name)}">Hacer administrador</button>`}</td></tr>`).join('')}</tbody></table></div>
+    <p class="mut small">Ser administrador permite instalar programas y cambiar el sistema. Cierra sesión y vuelve a entrar para que surta efecto.</p>`;
+  $$('button[data-u]').forEach(b => b.onclick = async () => {
+    if (!await ask('Hacer administrador', `¿Dar permisos de administrador a «${b.dataset.u}»?`, 'Confirmar')) return;
+    try { toast((await api('makeadmin', { user: b.dataset.u })).msg); go('adm'); } catch (e) { toast('Error: ' + e.message); }
   });
 };
 
-go('diag');
+go('panel');
 </script>
 </body>
 </html>
