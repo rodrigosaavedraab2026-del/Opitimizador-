@@ -24,7 +24,7 @@ Cerrar la ventana cierra el programa.
 - La limpieza solo vacía carpetas de temporales/caché conocidas y rechaza Documentos/Escritorio/Descargas.
 
 ## Descarga
-Ve a **Releases** y descarga `Instalar-OptimizadorPC.exe` (instalador) u `OptimizadorPC.exe` (portátil).
+Ve a la carpeta **descargas** y baja `Instalar-OptimizadorPC.exe` (instalador) u `OptimizadorPC.exe` (portátil).
 
 ## Recompilar el instalador
     # 1) compilar la app y copiarla al payload
