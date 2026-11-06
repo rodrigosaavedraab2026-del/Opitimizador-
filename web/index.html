@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optimizador PC</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1e2740; --line:#2a3552; --txt:#e6ebf5; --mut:#8d9bb8;
+    --acc:#3b82f6; --acc2:#2563eb; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+  .app{display:grid;grid-template-columns:210px 1fr;height:100%}
+  nav{background:var(--panel);border-right:1px solid var(--line);padding:16px 10px;display:flex;flex-direction:column;gap:4px}
+  .brand{font-weight:700;font-size:16px;padding:6px 10px 14px;display:flex;align-items:center;gap:8px}
+  .brand i{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--acc),#22d3ee);display:inline-block}
+  nav button{all:unset;cursor:pointer;padding:9px 12px;border-radius:8px;color:var(--mut);display:flex;gap:10px;align-items:center}
+  nav button:hover{background:var(--panel2);color:var(--txt)}
+  nav button.on{background:var(--panel2);color:var(--txt);box-shadow:inset 3px 0 0 var(--acc)}
+  .spacer{flex:1}
+  .badge{font-size:12px;padding:6px 10px;border-radius:8px;background:var(--panel2);color:var(--mut)}
+  .badge.ok{color:var(--ok)} .badge.bad{color:var(--warn)}
+  main{overflow:auto;padding:22px 26px}
+  h1{margin:0 0 4px;font-size:22px} .sub{color:var(--mut);margin:0 0 18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .card h3{margin:0 0 10px;font-size:14px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+  .stat b{display:block;font-size:20px} .stat span{color:var(--mut);font-size:12px}
+  .bar{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:6px 0 2px}
+  .bar>div{height:100%;background:var(--acc)} .bar.low>div{background:var(--bad)}
+  button.btn{all:unset;cursor:pointer;background:var(--acc);color:#fff;padding:9px 16px;border-radius:8px;font-weight:600}
+  button.btn:hover{background:var(--acc2)} button.btn[disabled]{opacity:.5;cursor:default}
+  button.sec{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  button.sec:hover{background:#27324f}
+  button.danger{background:var(--bad)} button.danger:hover{background:#dc2626}
+  button.sm{padding:5px 10px;font-weight:500;font-size:13px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase}
+  tr:hover td{background:rgba(255,255,255,.02)}
+  td.num{text-align:right;white-space:nowrap}
+  .chk{display:flex;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);align-items:flex-start}
+  .chk:last-child{border:0} .chk input{margin-top:3px;accent-color:var(--acc);width:16px;height:16px}
+  .chk .t{flex:1} .chk small{display:block;color:var(--mut)} .chk .sz{color:var(--mut);white-space:nowrap}
+  .log{background:#0a0e17;border:1px solid var(--line);border-radius:10px;padding:12px;font:12.5px/1.5 Consolas,monospace;
+       max-height:280px;overflow:auto;white-space:pre-wrap;margin-top:12px;display:none}
+  .log.show{display:block} .l-ok{color:var(--ok)} .l-warn{color:var(--warn)}
+  input[type=text],input[type=search]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:8px 12px;border-radius:8px;min-width:260px}
+  .pill{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--panel2);color:var(--mut)}
+  .pill.ok{color:var(--ok)} .pill.off{color:var(--warn)}
+  .sw{position:relative;width:38px;height:22px;display:inline-block}
+  .sw input{display:none} .sw span{position:absolute;inset:0;background:var(--line);border-radius:99px;cursor:pointer;transition:.15s}
+  .sw span:before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s}
+  .sw input:checked+span{background:var(--ok)} .sw input:checked+span:before{transform:translateX(16px)}
+  .toast{position:fixed;right:20px;bottom:20px;background:var(--panel2);border:1px solid var(--line);padding:12px 16px;border-radius:10px;max-width:380px;display:none;z-index:9}
+  .toast.show{display:block}
+  .note{color:var(--mut);font-size:12.5px}
+  .empty{color:var(--mut);padding:18px;text-align:center}
+  .cmd{color:var(--mut);font:12px Consolas,monospace;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  @media(max-width:760px){.app{grid-template-columns:1fr}nav{flex-direction:row;overflow:auto}.brand,.spacer,.badge{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav>
+    <div class="brand"><i></i> Optimizador PC</div>
+    <button data-p="diag" class="on">📊 Diagnóstico</button>
+    <button data-p="clean">🧹 Limpieza</button>
+    <button data-p="opt">⚡ Optimizar</button>
+    <button data-p="start">🚀 Programas de inicio</button>
+    <button data-p="prog">🗑️ Desinstalar</button>
+    <button data-p="adm">🛡️ Administrador</button>
+    <div class="spacer"></div>
+    <div id="adminBadge" class="badge">…</div>
+  </nav>
+  <main id="main"></main>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const arr = v => Array.isArray(v) ? v : (v == null ? [] : [v]);
+const fmt = b => { b = +b || 0; const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1024&&i<4){b/=1024;i++} return b.toFixed(i?2:0)+' '+u[i]; };
+
+async function api(path, body) {
+  const opt = body === undefined ? {} : { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) };
+  const r = await fetch('api/' + path, opt);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
+  return j;
+}
+let toastT;
+function toast(msg) { const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),5000); }
+
+// ---- latido: si se cierra la ventana, el programa termina solo
+async function ping() {
+  try { const r = await api('ping'); const b=$('#adminBadge');
+    b.textContent = r.admin ? '✔ Administrador' : '⚠ Sin permisos de admin'; b.className = 'badge ' + (r.admin ? 'ok' : 'bad'); } catch {}
+}
+setInterval(ping, 5000); ping();
+
+// ---- tareas largas con registro en vivo
+async function runJob(kind, items, logEl, btn) {
+  btn.disabled = true; logEl.classList.add('show'); logEl.innerHTML = '';
+  const { job } = await api(kind, { items });
+  let from = 0, done = false;
+  while (!done) {
+    const s = await api('job?id=' + job + '&from=' + from);
+    for (const l of s.lines) {
+      const d = document.createElement('div');
+      if (l.includes('[OK]')) d.className='l-ok'; else if (l.includes('[!!]')||l.includes('[XX]')) d.className='l-warn';
+      d.textContent = l; logEl.appendChild(d);
+    }
+    from = s.next; done = s.done; logEl.scrollTop = logEl.scrollHeight;
+    if (!done) await new Promise(r => setTimeout(r, 600));
+  }
+  btn.disabled = false;
+}
+
+const pages = {};
+function go(p) {
+  document.querySelectorAll('nav button[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === p));
+  $('#main').innerHTML = '<p class="sub">Cargando…</p>';
+  pages[p]().catch(e => { $('#main').innerHTML = '<div class="card">No se pudo cargar: ' + esc(e.message) + '</div>'; });
+}
+document.querySelectorAll('nav button[data-p]').forEach(b => b.onclick = () => go(b.dataset.p));
+
+// ---------------- Diagnostico
+pages.diag = async () => {
+  const d = await api('diag'); const s = d.sistema || {};
+  const discos = arr(s.discos).map(x => {
+    const pct = x.total ? x.libre / x.total * 100 : 0;
+    return `<div><b>${esc(x.letra)}</b> <span class="note">${fmt(x.libre)} libres de ${fmt(x.total)} (${pct.toFixed(1)}%)</span>
+      <div class="bar ${pct<10?'low':''}"><div style="width:${100-pct}%"></div></div>${pct<10?'<span class="pill off">Poco espacio</span>':''}</div>`;
+  }).join('') || '<span class="note">Sin datos</span>';
+  const top = arr(s.top).map(x => `<tr><td>${esc(x.nombre)}</td><td class="num">${fmt(x.bytes)}</td></tr>`).join('');
+  const salud = arr(s.salud).map(x => `<tr><td>${esc(x.nombre)}</td><td><span class="pill ${x.estado==='Healthy'?'ok':'off'}">${esc(x.estado)}</span></td></tr>`).join('');
+  const basura = arr(d.basura).filter(x => !x.manual).map(x => `<tr><td>${esc(x.name)}</td><td class="num">${fmt(x.bytes)}</td></tr>`).join('');
+  $('#main').innerHTML = `
+    <h1>Diagnóstico del sistema</h1><p class="sub">Solo lectura: no modifica nada.</p>
+    ${d.error ? `<div class="card"><span class="pill off">Aviso</span> ${esc(d.error)}</div>` : ''}
+    <div class="grid">
+      <div class="card stat"><span>Equipo</span><b>${esc(s.equipo||'—')}</b></div>
+      <div class="card stat"><span>Windows</span><b style="font-size:15px">${esc(s.windows||'—')}</b></div>
+      <div class="card stat"><span>Memoria RAM</span><b>${fmt(s.ramLibre)} libres</b><span>de ${fmt(s.ramTotal)}</span></div>
+      <div class="card stat"><span>Encendido desde hace</span><b>${esc(s.horas ?? '—')} h</b><span>${(s.horas||0)>168?'Conviene reiniciar':''}</span></div>
+    </div>
+    <div class="card"><h3>Procesador</h3>${esc(s.cpu||'—')}</div>
+    <div class="card"><h3>Discos</h3>${discos}</div>
+    <div class="card"><h3>Espacio recuperable (estimado): ${fmt(d.basuraTotal)}</h3>
+      <table>${basura}</table>
+      <div class="row" style="margin-top:12px"><button class="btn" onclick="go('clean')">Ir a limpieza</button></div></div>
+    <div class="grid">
+      <div class="card"><h3>Top 10 procesos por memoria</h3><table>${top}</table></div>
+      <div class="card"><h3>Salud de discos físicos</h3><table>${salud || '<tr><td class="note">No disponible</td></tr>'}</table></div>
+    </div>`;
+};
+
+// ---------------- Limpieza
+pages.clean = async () => {
+  const items = await api('scan');
+  $('#main').innerHTML = `
+    <h1>Limpieza</h1><p class="sub">Solo borra temporales y caché. Nunca toca tus documentos, contraseñas ni historial.</p>
+    <div class="card" id="list">${items.map(i => `
+      <label class="chk"><input type="checkbox" value="${i.id}" ${i.default?'checked':''}>
+        <div class="t">${esc(i.name)}<small>${esc(i.desc)}</small></div>
+        <div class="sz">${i.manual ? '' : fmt(i.bytes)}</div></label>`).join('')}</div>
+    <div class="row"><button class="btn" id="go">Limpiar ahora</button>
+      <button class="btn sec" id="rescan">Volver a medir</button>
+      <span class="note">Cierra los navegadores para limpiar su caché por completo. Los archivos en uso se omiten.</span></div>
+    <div class="log" id="log"></div>`;
+  $('#rescan').onclick = () => go('clean');
+  $('#go').onclick = async () => {
+    const sel = [...document.querySelectorAll('#list input:checked')].map(i => i.value);
+    if (!sel.length) return toast('Marca al menos una opción.');
+    if (!confirm('Se limpiarán ' + sel.length + ' elemento(s). ¿Continuar?')) return;
+    await runJob('clean', sel, $('#log'), $('#go'));
+  };
+};
+
+// ---------------- Optimizar
+pages.opt = async () => {
+  const opts = [
+    ['restore','Crear punto de restauración antes de empezar','Recomendado: permite volver atrás (Windows permite uno cada 24 h)',true],
+    ['power','Plan de energía de alto rendimiento','Reversible desde Configuración › Energía',true],
+    ['trim','Optimizar discos (TRIM en SSD / desfragmentar HDD)','Solo unidades fijas NTFS',true],
+    ['storage','Activar Sensor de almacenamiento','Limpieza automática de Windows',true],
+    ['dns','Vaciar caché DNS','',true],
+    ['dismcheck','Comprobar integridad del sistema (DISM CheckHealth)','Solo comprueba, no repara',false],
+  ];
+  $('#main').innerHTML = `
+    <h1>Optimizar rendimiento</h1><p class="sub">Ajustes seguros y reversibles. No desactiva servicios ni telemetría.</p>
+    <div class="card" id="list">${opts.map(o => `
+      <label class="chk"><input type="checkbox" value="${o[0]}" ${o[3]?'checked':''}>
+        <div class="t">${o[1]}<small>${o[2]}</small></div></label>`).join('')}</div>
+    <div class="row"><button class="btn" id="go">Optimizar ahora</button>
+      <button class="btn sec" onclick="go('start')">Gestionar programas de inicio</button></div>
+    <div class="log" id="log"></div>`;
+  $('#go').onclick = async () => {
+    const sel = [...document.querySelectorAll('#list input:checked')].map(i => i.value);
+    if (!sel.length) return toast('Marca al menos una opción.');
+    await runJob('optimize', sel, $('#log'), $('#go'));
+  };
+};
+
+// ---------------- Inicio
+pages.start = async () => {
+  const l = await api('startup');
+  if (l.error) throw new Error(l.error);
+  $('#main').innerHTML = `
+    <h1>Programas de inicio</h1>
+    <p class="sub">Desactiva lo que no necesites que arranque con Windows. Es reversible: puedes volver a activarlo aquí o en Administrador de tareas › Inicio.</p>
+    <div class="card"><table><tr><th>Programa</th><th>Comando</th><th>Origen</th><th>Activo</th></tr>
+    ${arr(l).map((x,i) => `<tr><td>${esc(x.name)}</td><td class="cmd" title="${esc(x.cmd)}">${esc(x.cmd)}</td>
+      <td><span class="pill">${esc(x.scope)}</span></td>
+      <td><label class="sw"><input type="checkbox" data-i="${i}" ${x.enabled?'checked':''}><span></span></label></td></tr>`).join('')
+      || '<tr><td colspan="4" class="empty">No hay programas de inicio en el registro.</td></tr>'}</table></div>
+    <p class="note">Solo se listan los programas del registro (Run). Los de la carpeta Inicio se gestionan desde el Administrador de tareas.</p>`;
+  document.querySelectorAll('.sw input').forEach(cb => cb.onchange = async () => {
+    const x = l[cb.dataset.i];
+    try { await api('startup', { scope:x.scope, name:x.name, enabled:cb.checked });
+      toast((cb.checked?'Activado: ':'Desactivado: ') + x.name); }
+    catch(e) { cb.checked = !cb.checked; toast('Error: ' + e.message); }
+  });
+};
+
+// ---------------- Programas
+pages.prog = async () => {
+  const l = await api('programs');
+  if (l.error) throw new Error(l.error);
+  $('#main').innerHTML = `
+    <h1>Desinstalar programas</h1><p class="sub">Se abre el desinstalador del propio programa. Nada se quita sin tu confirmación.</p>
+    <div class="row" style="margin-bottom:12px"><input type="search" id="q" placeholder="Buscar programa…"><span class="note" id="cnt"></span></div>
+    <div class="card"><table><thead><tr><th>Programa</th><th>Versión</th><th>Editor</th><th class="num">Tamaño</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>`;
+  const draw = () => {
+    const q = $('#q').value.toLowerCase();
+    const f = arr(l).filter(x => x.nombre.toLowerCase().includes(q) || (x.editor||'').toLowerCase().includes(q));
+    $('#cnt').textContent = f.length + ' de ' + arr(l).length + ' programas';
+    $('#tb').innerHTML = f.map(x => `<tr><td>${esc(x.nombre)}</td><td>${esc(x.version)}</td><td>${esc(x.editor)}</td>
+      <td class="num">${x.mb ? x.mb.toLocaleString('es') + ' MB' : '—'}</td>
+      <td class="num"><button class="btn sm danger" data-id="${esc(x.id)}" data-n="${esc(x.nombre)}">Desinstalar</button></td></tr>`).join('')
+      || '<tr><td colspan="5" class="empty">Sin resultados</td></tr>';
+    document.querySelectorAll('#tb button').forEach(b => b.onclick = async () => {
+      if (!confirm('¿Desinstalar "' + b.dataset.n + '"?')) return;
+      try { const r = await api('uninstall', { id:b.dataset.id }); toast(r.msg); } catch(e) { toast('Error: ' + e.message); }
+    });
+  };
+  $('#q').oninput = draw; draw();
+};
+
+// ---------------- Administrador
+pages.adm = async () => {
+  const l = await api('users');
+  if (l.error) throw new Error(l.error);
+  $('#main').innerHTML = `
+    <h1>Permisos de administrador</h1>
+    <p class="sub">Convierte a un usuario local de ESTE equipo en administrador. Úsalo solo en equipos que administras tú.</p>
+    <div class="card"><table><tr><th>Usuario local</th><th>Rol</th><th></th></tr>
+    ${arr(l).map(u => `<tr><td>${esc(u.name)}</td>
+      <td><span class="pill ${u.admin?'ok':''}">${u.admin?'Administrador':'Estándar'}</span></td>
+      <td class="num">${u.admin?'':`<button class="btn sm" data-u="${esc(u.name)}">Hacer administrador</button>`}</td></tr>`).join('')}</table></div>
+    <p class="note">Ser administrador permite instalar programas y cambiar el sistema. Cierra sesión y vuelve a entrar para que surta efecto.</p>`;
+  document.querySelectorAll('button[data-u]').forEach(b => b.onclick = async () => {
+    if (!confirm('¿Hacer administrador a "' + b.dataset.u + '"?')) return;
+    try { const r = await api('makeadmin', { user:b.dataset.u }); toast(r.msg); go('adm'); } catch(e) { toast('Error: ' + e.message); }
+  });
+};
+
+go('diag');
+</script>
+</body>
+</html>
